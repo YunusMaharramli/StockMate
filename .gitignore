@@ -1,0 +1,58 @@
+# Build nəticələri
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# Test nəticələri
+TestResults/
+*.trx
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+
+# Log və müvəqqəti fayllar
+*.log
+*.tmp
+*.temp
+*.cache
+*.bak
+
+# Lokal environment və sirlər
+.env
+.env.*
+!.env.example
+secrets.json
+
+# Lokal konfiqurasiya
+StockMate.Bot/appsettings.json
+StockMate.Bot/appsettings.Development.json
+StockMate.Bot/appsettings.Local.json
+
+# Publish nəticələri
+publish/
+*.pubxml
+*.pubxml.user
+
+# OS faylları
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/

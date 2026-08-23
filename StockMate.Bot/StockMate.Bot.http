@@ -1,0 +1,6 @@
+@StockMate.Bot_HostAddress = http://localhost:5157
+
+GET {{StockMate.Bot_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
