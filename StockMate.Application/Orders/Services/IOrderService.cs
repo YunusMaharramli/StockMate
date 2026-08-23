@@ -33,6 +33,14 @@ public interface IOrderService
         long orderNumber,
         CancellationToken cancellationToken = default);
 
+    Task<OrderDto> DeliverReadyItemsAsync(
+        long orderNumber,
+        CancellationToken cancellationToken = default);
+
+    Task<OrderDto> CancelRemainingItemsAsync(
+        long orderNumber,
+        CancellationToken cancellationToken = default);
+
     Task CancelAsync(
         long orderNumber,
         string reason,
@@ -46,6 +54,11 @@ public interface IOrderService
     Task SetAdminNoteAsync(
         long orderNumber,
         string? adminNote,
+        CancellationToken cancellationToken = default);
+
+    Task SetDeliveryModeAsync(
+        long orderNumber,
+        DeliveryMode deliveryMode,
         CancellationToken cancellationToken = default);
 
     Task ChangeSpecialOrderStatusAsync(

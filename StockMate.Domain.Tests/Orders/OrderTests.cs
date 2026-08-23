@@ -77,8 +77,7 @@ public class OrderTests
         order.AddItem(product, 2, 0);
         order.Confirm();
         order.MarkAsPreparing();
-        order.MarkAsDelivering();
-        order.Complete();
+        order.DeliverReadyItems();
 
         Assert.Equal(OrderStatus.Completed, order.Status);
         Assert.NotNull(order.ConfirmedAtUtc);
@@ -123,11 +122,87 @@ public class OrderTests
         order.AddItem(product, 2, 0);
         order.Confirm();
         order.MarkAsPreparing();
-        order.MarkAsDelivering();
-        order.Complete();
+        order.DeliverReadyItems();
 
         Assert.Throws<InvalidOperationException>(() =>
             order.Cancel("Invalid cancellation."));
+    }
+
+    [Fact]
+    public void DeliverReadyItems_ShouldKeepRemainingSpecialQuantityOpen()
+    {
+        var order = CreateOrder();
+        var product = CreateProduct(stockQuantity: 3);
+
+        order.AddItem(product, 3, 2);
+        order.Confirm();
+        order.MarkAsPreparing();
+        order.SetDeliveryMode(DeliveryMode.PartialAllowed);
+
+        order.DeliverReadyItems();
+
+        var item = Assert.Single(order.Items);
+        Assert.Equal(3, item.DeliveredQuantity);
+        Assert.Equal(2, item.RemainingQuantity);
+        Assert.Equal(FulfillmentStatus.PartiallyDelivered, order.FulfillmentStatus);
+        Assert.Equal(OrderStatus.Preparing, order.Status);
+    }
+
+    [Fact]
+    public void DeliverReadyItems_ShouldCompleteAfterRemainingQuantityArrives()
+    {
+        var order = CreateOrder();
+        var product = CreateProduct(stockQuantity: 3);
+
+        order.AddItem(product, 3, 2);
+        order.Confirm();
+        order.MarkAsPreparing();
+        order.SetDeliveryMode(DeliveryMode.PartialAllowed);
+        order.DeliverReadyItems();
+
+        var item = Assert.Single(order.Items);
+        item.MarkAsOrderedFromSupplier();
+        item.MarkSpecialOrderAsArrived();
+        order.DeliverReadyItems();
+
+        Assert.Equal(5, item.DeliveredQuantity);
+        Assert.Equal(0, item.RemainingQuantity);
+        Assert.Equal(FulfillmentStatus.FullyDelivered, order.FulfillmentStatus);
+        Assert.Equal(OrderStatus.Completed, order.Status);
+    }
+
+    [Fact]
+    public void CancelRemainingItems_ShouldClosePartiallyDeliveredOrder()
+    {
+        var order = CreateOrder();
+        var product = CreateProduct(stockQuantity: 3);
+
+        order.AddItem(product, 3, 2);
+        order.Confirm();
+        order.MarkAsPreparing();
+        order.SetDeliveryMode(DeliveryMode.PartialAllowed);
+        order.DeliverReadyItems();
+
+        order.CancelRemainingItems();
+
+        Assert.Equal(FulfillmentStatus.ClosedWithShortage, order.FulfillmentStatus);
+        Assert.Equal(OrderStatus.Completed, order.Status);
+        Assert.Equal(0, order.RemainingQuantity);
+    }
+
+    [Fact]
+    public void DeliverReadyItems_ShouldWait_WhenAllTogetherIsSelected()
+    {
+        var order = CreateOrder();
+        var product = CreateProduct(stockQuantity: 3);
+
+        order.AddItem(product, 3, 2);
+        order.Confirm();
+        order.MarkAsPreparing();
+        order.SetDeliveryMode(DeliveryMode.AllTogether);
+
+        Assert.Throws<InvalidOperationException>(order.DeliverReadyItems);
+        Assert.Equal(0, Assert.Single(order.Items).DeliveredQuantity);
     }
 
     private static Order CreateOrder()

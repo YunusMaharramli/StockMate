@@ -33,6 +33,7 @@ public class Order
         Latitude = latitude;
         Longitude = longitude;
         Status = OrderStatus.PendingAdminApproval;
+        DeliveryMode = DeliveryMode.Undecided;
         CreatedAtUtc = DateTime.UtcNow;
     }
 
@@ -51,6 +52,8 @@ public class Order
     public double? Longitude { get; private set; }
 
     public OrderStatus Status { get; private set; }
+
+    public DeliveryMode DeliveryMode { get; private set; }
 
     public decimal? DeliveryFee { get; private set; }
 
@@ -74,6 +77,19 @@ public class Order
 
     public bool ContainsSpecialOrder =>
         _items.Any(item => item.SpecialOrderQuantity > 0);
+
+    public FulfillmentStatus FulfillmentStatus =>
+        _items.All(item => item.DeliveredQuantity == item.TotalQuantity)
+            ? FulfillmentStatus.FullyDelivered
+            : _items.All(item => item.RemainingQuantity == 0)
+                ? FulfillmentStatus.ClosedWithShortage
+                : _items.Any(item => item.DeliveredQuantity > 0)
+                    ? FulfillmentStatus.PartiallyDelivered
+                    : FulfillmentStatus.Waiting;
+
+    public int RemainingQuantity => _items.Sum(item => item.RemainingQuantity);
+
+    public int ReadyQuantity => _items.Sum(item => item.ReadyQuantity);
 
     public void AddItem(
         Product product,
@@ -147,10 +163,86 @@ public class Order
 
     public void Complete()
     {
-        EnsureStatus(OrderStatus.Delivering);
+        if (_items.Any(item => item.RemainingQuantity > 0))
+            throw new InvalidOperationException(
+                "Order still contains undelivered products.");
 
         Status = OrderStatus.Completed;
         CompletedAtUtc = DateTime.UtcNow;
+    }
+
+    public void SetDeliveryMode(DeliveryMode deliveryMode)
+    {
+        if (deliveryMode == DeliveryMode.Undecided)
+            throw new ArgumentOutOfRangeException(nameof(deliveryMode));
+
+        if (_items.Any(item => item.DeliveredQuantity > 0))
+            throw new InvalidOperationException(
+                "Delivery mode cannot be changed after the first delivery.");
+
+        DeliveryMode = deliveryMode;
+    }
+
+    public IReadOnlyDictionary<Guid, int> DeliverReadyItems()
+    {
+        if (Status is OrderStatus.PendingAdminApproval or
+            OrderStatus.Completed or OrderStatus.Cancelled)
+        {
+            throw new InvalidOperationException(
+                "Order must be confirmed before delivery.");
+        }
+
+        if (DeliveryMode != DeliveryMode.PartialAllowed &&
+            ReadyQuantity < RemainingQuantity)
+        {
+            throw new InvalidOperationException(
+                "The order is configured to be delivered all together.");
+        }
+
+        var delivered = new Dictionary<Guid, int>();
+
+        foreach (var item in _items)
+        {
+            var quantity = item.DeliverReadyQuantity();
+
+            if (quantity > 0)
+                delivered[item.Id] = quantity;
+        }
+
+        if (delivered.Count == 0)
+            throw new InvalidOperationException("No products are ready for delivery.");
+
+        if (_items.All(item => item.RemainingQuantity == 0))
+        {
+            Status = OrderStatus.Completed;
+            CompletedAtUtc = DateTime.UtcNow;
+        }
+        else
+        {
+            Status = OrderStatus.Preparing;
+        }
+
+        return delivered;
+    }
+
+    public int CancelRemainingItems()
+    {
+        if (Status is OrderStatus.PendingAdminApproval or
+            OrderStatus.Completed or OrderStatus.Cancelled)
+        {
+            throw new InvalidOperationException(
+                "Remaining products cannot be cancelled in the current status.");
+        }
+
+        var cancelled = _items.Sum(item => item.CancelRemainingQuantity());
+
+        if (cancelled == 0)
+            throw new InvalidOperationException("Order has no remaining products.");
+
+        Status = OrderStatus.Completed;
+        CompletedAtUtc = DateTime.UtcNow;
+
+        return cancelled;
     }
 
     public void Cancel(string reason)
@@ -163,6 +255,11 @@ public class Order
             throw new ArgumentException(
                 "Cancellation reason is required.",
                 nameof(reason));
+
+        if (_items.Any(item => item.DeliveredQuantity > 0))
+            throw new InvalidOperationException(
+                "A partially delivered order cannot be fully cancelled. " +
+                "Cancel only its remaining products.");
 
         Status = OrderStatus.Cancelled;
         CancellationReason = reason.Trim();

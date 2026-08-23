@@ -71,11 +71,27 @@ public class OrderItem
 
     public int SpecialOrderQuantity { get; private set; }
 
+    public int DeliveredQuantity { get; private set; }
+
+    public int CancelledQuantity { get; private set; }
+
     public int TotalQuantity =>
         FromStockQuantity + SpecialOrderQuantity;
 
     public decimal LineTotal =>
         UnitPrice * TotalQuantity;
+
+    public int RemainingQuantity =>
+        TotalQuantity - DeliveredQuantity - CancelledQuantity;
+
+    public int ReadyQuantity => Math.Max(
+        0,
+        FromStockQuantity +
+        (SpecialOrderStatus is SpecialOrderStatus.Arrived or SpecialOrderStatus.Completed
+            ? SpecialOrderQuantity
+            : 0) -
+        DeliveredQuantity -
+        CancelledQuantity);
 
     public SpecialOrderStatus SpecialOrderStatus { get; private set; }
 
@@ -105,6 +121,39 @@ public class OrderItem
         EnsureSpecialOrderExists();
 
         SpecialOrderStatus = SpecialOrderStatus.Cancelled;
+    }
+
+    internal int DeliverReadyQuantity()
+    {
+        var quantity = Math.Min(ReadyQuantity, RemainingQuantity);
+
+        if (quantity > 0)
+            DeliveredQuantity += quantity;
+
+        if (RemainingQuantity == 0 &&
+            SpecialOrderStatus == SpecialOrderStatus.Arrived)
+        {
+            SpecialOrderStatus = SpecialOrderStatus.Completed;
+        }
+
+        return quantity;
+    }
+
+    internal int CancelRemainingQuantity()
+    {
+        var quantity = RemainingQuantity;
+
+        if (quantity > 0)
+            CancelledQuantity += quantity;
+
+        if (quantity > 0 &&
+            SpecialOrderQuantity > 0 &&
+            SpecialOrderStatus is not SpecialOrderStatus.Completed)
+        {
+            SpecialOrderStatus = SpecialOrderStatus.Cancelled;
+        }
+
+        return quantity;
     }
 
     private void EnsureSpecialOrderExists()

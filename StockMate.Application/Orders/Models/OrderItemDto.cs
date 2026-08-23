@@ -10,6 +10,10 @@ public sealed record OrderItemDto(
     decimal UnitPrice,
     int FromStockQuantity,
     int SpecialOrderQuantity,
+    int DeliveredQuantity,
+    int CancelledQuantity,
+    int RemainingQuantity,
+    int ReadyQuantity,
     int TotalQuantity,
     decimal LineTotal,
     SpecialOrderStatus SpecialOrderStatus);

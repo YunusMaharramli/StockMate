@@ -169,6 +169,9 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<int>("DeliveryMode")
+                        .HasColumnType("integer");
+
                     b.Property<double?>("Latitude")
                         .HasColumnType("double precision");
 
@@ -208,6 +211,12 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<int>("CancelledQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DeliveredQuantity")
+                        .HasColumnType("integer");
 
                     b.Property<int>("FromStockQuantity")
                         .HasColumnType("integer");

@@ -95,20 +95,7 @@ public class OrderService : IOrderService
             var missingQuantity =
                 cartItem.Quantity - fromStockQuantity;
 
-            if (missingQuantity > 0 &&
-                cartItem.FulfillmentMode ==
-                CartItemFulfillmentMode.StockOnly)
-            {
-                throw new InvalidOperationException(
-                    $"Product '{product.Name}' does not have enough stock. " +
-                    "Update the cart before checkout.");
-            }
-
-            var specialOrderQuantity =
-                cartItem.FulfillmentMode ==
-                CartItemFulfillmentMode.IncludeSpecialOrder
-                    ? missingQuantity
-                    : 0;
+            var specialOrderQuantity = missingQuantity;
 
             order.AddItem(
                 product,
@@ -242,9 +229,39 @@ public class OrderService : IOrderService
             orderNumber,
             cancellationToken);
 
-        order.Complete();
+        if (order.RemainingQuantity > 0)
+            order.DeliverReadyItems();
+        else if (order.Status != OrderStatus.Completed)
+            order.Complete();
 
         await _orderRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<OrderDto> DeliverReadyItemsAsync(
+        long orderNumber,
+        CancellationToken cancellationToken = default)
+    {
+        var order = await GetRequiredOrderAsync(orderNumber, cancellationToken);
+
+        order.DeliverReadyItems();
+
+        await _orderRepository.SaveChangesAsync(cancellationToken);
+
+        return MapOrder(order);
+    }
+
+    public async Task<OrderDto> CancelRemainingItemsAsync(
+        long orderNumber,
+        CancellationToken cancellationToken = default)
+    {
+        var order = await GetRequiredOrderAsync(orderNumber, cancellationToken);
+
+        await RestoreUndeliveredStockAsync(order, cancellationToken);
+        order.CancelRemainingItems();
+
+        await _orderRepository.SaveChangesAsync(cancellationToken);
+
+        return MapOrder(order);
     }
 
     public async Task CancelAsync(
@@ -263,35 +280,7 @@ public class OrderService : IOrderService
 
         if (stockWasDeducted)
         {
-            var productIds = order.Items
-                .Where(item => item.FromStockQuantity > 0)
-                .Select(item => item.ProductId)
-                .ToArray();
-
-            var products = await _productRepository.GetByIdsAsync(
-                productIds,
-                cancellationToken);
-
-            var productsById = products.ToDictionary(
-                product => product.Id);
-
-            foreach (var item in order.Items)
-            {
-                if (item.FromStockQuantity == 0)
-                    continue;
-
-                var product = productsById[item.ProductId];
-
-                var movement = product.RestoreFromCancelledOrder(
-                    item.FromStockQuantity,
-                    order.Id);
-
-                _productRepository.Update(product);
-
-                await _productRepository.AddStockMovementAsync(
-                    movement,
-                    cancellationToken);
-            }
+            await RestoreUndeliveredStockAsync(order, cancellationToken);
         }
 
         order.Cancel(reason);
@@ -323,6 +312,18 @@ public class OrderService : IOrderService
             cancellationToken);
 
         order.SetAdminNote(adminNote);
+
+        await _orderRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task SetDeliveryModeAsync(
+        long orderNumber,
+        DeliveryMode deliveryMode,
+        CancellationToken cancellationToken = default)
+    {
+        var order = await GetRequiredOrderAsync(orderNumber, cancellationToken);
+
+        order.SetDeliveryMode(deliveryMode);
 
         await _orderRepository.SaveChangesAsync(cancellationToken);
     }
@@ -379,6 +380,44 @@ public class OrderService : IOrderService
                    $"Order number '{orderNumber}' was not found.");
     }
 
+    private async Task RestoreUndeliveredStockAsync(
+        Order order,
+        CancellationToken cancellationToken)
+    {
+        var quantities = order.Items
+            .Select(item => new
+            {
+                Item = item,
+                Quantity = Math.Min(
+                    item.RemainingQuantity,
+                    Math.Max(0, item.FromStockQuantity - item.DeliveredQuantity))
+            })
+            .Where(entry => entry.Quantity > 0)
+            .ToList();
+
+        if (quantities.Count == 0)
+            return;
+
+        var products = await _productRepository.GetByIdsAsync(
+            quantities.Select(entry => entry.Item.ProductId).ToArray(),
+            cancellationToken);
+
+        var productsById = products.ToDictionary(product => product.Id);
+
+        foreach (var entry in quantities)
+        {
+            var product = productsById[entry.Item.ProductId];
+            var movement = product.RestoreFromCancelledOrder(
+                entry.Quantity,
+                order.Id);
+
+            _productRepository.Update(product);
+            await _productRepository.AddStockMovementAsync(
+                movement,
+                cancellationToken);
+        }
+    }
+
     private static OrderDto MapOrder(Order order)
     {
         var items = order.Items
@@ -390,6 +429,10 @@ public class OrderService : IOrderService
                 item.UnitPrice,
                 item.FromStockQuantity,
                 item.SpecialOrderQuantity,
+                item.DeliveredQuantity,
+                item.CancelledQuantity,
+                item.RemainingQuantity,
+                item.ReadyQuantity,
                 item.TotalQuantity,
                 item.LineTotal,
                 item.SpecialOrderStatus))
@@ -404,11 +447,15 @@ public class OrderService : IOrderService
             order.Latitude,
             order.Longitude,
             order.Status,
+            order.DeliveryMode,
             items,
             order.ProductsTotal,
             order.DeliveryFee,
             order.TotalAmount,
             order.ContainsSpecialOrder,
+            order.FulfillmentStatus,
+            order.RemainingQuantity,
+            order.ReadyQuantity,
             order.AdminNote,
             order.CancellationReason,
             order.CreatedAtUtc,

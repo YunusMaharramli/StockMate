@@ -34,6 +34,10 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .HasConversion<int>()
             .IsRequired();
 
+        builder.Property(order => order.DeliveryMode)
+            .HasConversion<int>()
+            .IsRequired();
+
         builder.Property(order => order.DeliveryFee)
             .HasPrecision(18, 2);
 
@@ -49,6 +53,9 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Ignore(order => order.ProductsTotal);
         builder.Ignore(order => order.TotalAmount);
         builder.Ignore(order => order.ContainsSpecialOrder);
+        builder.Ignore(order => order.FulfillmentStatus);
+        builder.Ignore(order => order.RemainingQuantity);
+        builder.Ignore(order => order.ReadyQuantity);
 
         builder.HasIndex(order => order.Status);
         builder.HasIndex(order => order.CreatedAtUtc);

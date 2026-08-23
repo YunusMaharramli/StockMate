@@ -119,6 +119,16 @@ public class TelegramUpdateHandler
         var chatId = query.Message.Chat.Id;
         var telegramUserId = query.From.Id;
 
+        if (query.Data.StartsWith("admin:") &&
+            query.From.Id != _telegramOptions.AdminUserId)
+        {
+            await _botClient.SendMessage(
+                chatId,
+                "Bu əməliyyat yalnız admin üçündür.");
+
+            return;
+        }
+
         if (query.Data == "menu:products")
         {
             await SendProductsPageAsync(
@@ -271,13 +281,118 @@ public class TelegramUpdateHandler
 
             return;
         }
-        if (query.Data.StartsWith("admin:") &&
-            query.From.Id != _telegramOptions.AdminUserId)
+
+        if (query.Data.StartsWith("admin:delivery-mode:all:"))
         {
+            var numberText = query.Data["admin:delivery-mode:all:".Length..];
+
+            if (!long.TryParse(numberText, out var orderNumber))
+                return;
+
+            await _orderService.SetDeliveryModeAsync(
+                orderNumber,
+                DeliveryMode.AllTogether);
+
+            await NotifyOrderStatusAsync(
+                orderNumber,
+                "⏳ Sifarişinizin bütün məhsulları birlikdə çatdırılacaq. Hazır olduqda sizə məlumat veriləcək.");
+
+            await SendAdminOrderActionsAsync(chatId, orderNumber);
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:delivery-mode:partial:"))
+        {
+            var numberText = query.Data["admin:delivery-mode:partial:".Length..];
+
+            if (!long.TryParse(numberText, out var orderNumber))
+                return;
+
+            await _orderService.SetDeliveryModeAsync(
+                orderNumber,
+                DeliveryMode.PartialAllowed);
+
+            await SendAdminOrderActionsAsync(chatId, orderNumber);
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:deliver-ready:"))
+        {
+            var numberText = query.Data["admin:deliver-ready:".Length..];
+
+            if (!long.TryParse(numberText, out var orderNumber))
+                return;
+
+            var before = await _orderService.GetByOrderNumberAsync(orderNumber)
+                ?? throw new KeyNotFoundException("Order was not found.");
+
+            var order = await _orderService.DeliverReadyItemsAsync(orderNumber);
+            var deliveredText = new StringBuilder();
+
+            foreach (var item in order.Items)
+            {
+                var previous = before.Items
+                    .First(existing => existing.Id == item.Id)
+                    .DeliveredQuantity;
+                var deliveredNow = item.DeliveredQuantity - previous;
+
+                if (deliveredNow > 0)
+                    deliveredText.AppendLine($"• {item.ProductName}: {deliveredNow} ədəd");
+            }
+
+            await NotifyOrderStatusAsync(
+                orderNumber,
+                $"🚚 Sifarişinizdən aşağıdakı məhsullar göndərildi:\n\n" +
+                deliveredText +
+                (order.RemainingQuantity > 0
+                    ? $"\nQalan məhsul sayı: {order.RemainingQuantity}. Hazır olduqda sizə məlumat veriləcək."
+                    : "\nSifarişiniz tam çatdırıldı."));
+
+            await SendAdminOrderActionsAsync(chatId, orderNumber);
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:cancel-remaining:"))
+        {
+            var numberText = query.Data["admin:cancel-remaining:".Length..];
+
+            if (!long.TryParse(numberText, out var orderNumber))
+                return;
+
             await _botClient.SendMessage(
                 chatId,
-                "Bu əməliyyat yalnız admin üçündür.");
+                $"Sifariş #{orderNumber} üzrə qalan hissə ləğv edilsin?",
+                replyMarkup: new InlineKeyboardMarkup(
+                    new[]
+                    {
+                        new[]
+                        {
+                            InlineKeyboardButton.WithCallbackData(
+                                "Bəli, qalanı ləğv et",
+                                $"admin:cancel-rem-confirm:{orderNumber}"),
+                            InlineKeyboardButton.WithCallbackData(
+                                "Xeyr",
+                                $"admin:actions:{orderNumber}")
+                        }
+                    }));
 
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:cancel-rem-confirm:"))
+        {
+            var numberText = query.Data["admin:cancel-rem-confirm:".Length..];
+
+            if (!long.TryParse(numberText, out var orderNumber))
+                return;
+
+            await _orderService.CancelRemainingItemsAsync(orderNumber);
+
+            await NotifyOrderStatusAsync(
+                orderNumber,
+                "Qalan çatdırılmamış məhsullar admin tərəfindən ləğv edildi.");
+
+            await SendAdminOrderActionsAsync(chatId, orderNumber);
             return;
         }
         if (query.Data.StartsWith("admin:preparing:"))
@@ -410,6 +525,53 @@ public class TelegramUpdateHandler
             return;
         }
 
+        if (query.Data.StartsWith("admin:customer-orders:"))
+        {
+            var numberText =
+                query.Data["admin:customer-orders:".Length..];
+
+            if (!long.TryParse(numberText, out var currentOrderNumber))
+                return;
+
+            var currentOrder =
+                await _orderService.GetByOrderNumberAsync(currentOrderNumber)
+                ?? throw new KeyNotFoundException("Order was not found.");
+
+            var customer =
+                await _customerService.GetByIdAsync(currentOrder.CustomerId)
+                ?? throw new KeyNotFoundException("Customer was not found.");
+
+            var orders = (await _orderService.GetCustomerOrdersAsync(
+                    customer.TelegramUserId))
+                .Where(order => order.OrderNumber != currentOrderNumber)
+                .Take(10)
+                .ToList();
+
+            var rows = orders
+                .Select(order => new[]
+                {
+                    InlineKeyboardButton.WithCallbackData(
+                        $"#{order.OrderNumber} — {GetOrderStatusText(order.Status)}",
+                        $"admin:actions:{order.OrderNumber}")
+                })
+                .ToList();
+
+            rows.Add(
+            [
+                InlineKeyboardButton.WithCallbackData(
+                    $"⬅️ Sifariş #{currentOrderNumber}",
+                    $"admin:actions:{currentOrderNumber}")
+            ]);
+
+            await _botClient.SendMessage(
+                chatId,
+                $"👤 {customer.FirstName} {customer.LastName}\n\n" +
+                "Müştərinin digər sifarişləri:",
+                replyMarkup: new InlineKeyboardMarkup(rows));
+
+            return;
+        }
+
         if (query.Data.StartsWith("cart:add:"))
         {
             var parts = query.Data.Split(':');
@@ -421,14 +583,7 @@ public class TelegramUpdateHandler
                 return;
             }
 
-            var mode = parts[4] switch
-            {
-                "s" => CartItemFulfillmentMode.StockOnly,
-                "p" => CartItemFulfillmentMode.IncludeSpecialOrder,
-
-                _ => throw new InvalidOperationException(
-                    "Unknown cart fulfillment mode.")
-            };
+            var mode = CartItemFulfillmentMode.IncludeSpecialOrder;
 
             await _cartService.AddOrUpdateItemAsync(
                 telegramUserId,
@@ -1032,15 +1187,11 @@ public class TelegramUpdateHandler
         {
             var product = result.Items[index];
 
-            var stockText = product.StockQuantity > 0
-                ? $"{product.StockQuantity} ədəd"
-                : "Stokda yoxdur";
-
             text.AppendLine(
                 $"{index + 1}. {product.Name}");
 
             text.AppendLine(
-                $"   💰 {product.Price:0.00} AZN | 📦 {stockText}");
+                $"   💰 {product.Price:0.00} AZN");
         }
 
         var rows = new List<InlineKeyboardButton[]>();
@@ -1149,18 +1300,6 @@ public class TelegramUpdateHandler
                 $"{item.UnitPrice:0.00} AZN = " +
                 $"{item.LineTotal:0.00} AZN");
 
-            if (item.SpecialOrderQuantity > 0)
-            {
-                text.AppendLine(
-                    $"  Stokdan: {item.FromStockQuantity}, " +
-                    $"sifarişlə: {item.SpecialOrderQuantity}");
-            }
-
-            if (item.UnavailableQuantity > 0)
-            {
-                text.AppendLine(
-                    $"  ⚠️ Çatışmayan: {item.UnavailableQuantity}");
-            }
         }
 
         text.AppendLine();
@@ -1314,17 +1453,6 @@ public class TelegramUpdateHandler
         ProductDto product,
         int quantity)
     {
-        var fromStockQuantity = Math.Min(
-            quantity,
-            product.StockQuantity);
-
-        var specialOrderQuantity =
-            quantity - fromStockQuantity;
-
-        var stockText = product.StockQuantity > 0
-            ? $"{product.StockQuantity} ədəd"
-            : "Stokda yoxdur";
-
         var description = product.Description.Length > 600
             ? product.Description[..600] + "..."
             : product.Description;
@@ -1335,19 +1463,8 @@ public class TelegramUpdateHandler
         text.AppendLine();
         text.AppendLine($"Kod: {product.Code}");
         text.AppendLine($"Qiymət: {product.Price:0.00} AZN");
-        text.AppendLine($"Stok: {stockText}");
         text.AppendLine($"Miqdar: {quantity}");
         text.AppendLine($"Cəmi: {product.Price * quantity:0.00} AZN");
-
-        if (specialOrderQuantity > 0)
-        {
-            text.AppendLine();
-            text.AppendLine(
-                $"Stokdan: {fromStockQuantity} ədəd");
-
-            text.AppendLine(
-                $"Sifarişlə gətiriləcək: {specialOrderQuantity} ədəd");
-        }
 
         text.AppendLine();
         text.AppendLine(description);
@@ -1377,34 +1494,12 @@ public class TelegramUpdateHandler
         }
     };
 
-        if (quantity <= product.StockQuantity)
-        {
-            rows.Add(
-            [
-                InlineKeyboardButton.WithCallbackData(
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData(
                 $"🛒 {quantity} ədəd səbətə əlavə et",
-                $"cart:add:{product.Id}:{quantity}:s")
-            ]);
-        }
-        else
-        {
-            if (product.StockQuantity > 0)
-            {
-                rows.Add(
-                [
-                    InlineKeyboardButton.WithCallbackData(
-                    $"🛒 Yalnız {product.StockQuantity} stokdakı məhsulu al",
-                    $"cart:add:{product.Id}:{product.StockQuantity}:s")
-                ]);
-            }
-
-            rows.Add(
-            [
-                InlineKeyboardButton.WithCallbackData(
-                "📦 Çatışmayan hissəni sifarişlə gətir",
                 $"cart:add:{product.Id}:{quantity}:p")
-            ]);
-        }
+        ]);
 
         rows.Add(
         [
@@ -1748,17 +1843,56 @@ public class TelegramUpdateHandler
             ?? throw new KeyNotFoundException(
                 "Order was not found.");
 
+        var customer =
+            await _customerService.GetByIdAsync(order.CustomerId)
+            ?? throw new KeyNotFoundException(
+                "Customer was not found.");
+
+        var customerOrders =
+            await _orderService.GetCustomerOrdersAsync(
+                customer.TelegramUserId);
+
+        var allOtherOrders = customerOrders
+            .Where(customerOrder =>
+                customerOrder.OrderNumber != order.OrderNumber)
+            .ToList();
+
+        var otherOrders = allOtherOrders.Take(5).ToList();
+
         var text = new StringBuilder();
 
         text.AppendLine($"📦 Sifariş #{order.OrderNumber}");
         text.AppendLine(
             $"Status: {GetOrderStatusText(order.Status)}");
+        text.AppendLine(
+            $"Çatdırılma: {GetDeliveryModeText(order.DeliveryMode)}");
+        text.AppendLine();
+
+        var fullName = string.Join(
+            " ",
+            new[] { customer.FirstName, customer.LastName }
+                .Where(value => !string.IsNullOrWhiteSpace(value)));
+
+        text.AppendLine($"👤 Müştəri: {fullName}");
+
+        if (!string.IsNullOrWhiteSpace(customer.Username))
+            text.AppendLine($"Telegram: @{customer.Username}");
+
+        text.AppendLine($"Telefon: {order.PhoneNumber}");
+        text.AppendLine($"Ünvan: {order.DeliveryAddress}");
+        text.AppendLine(
+            $"Digər sifarişlər: {allOtherOrders.Count}");
         text.AppendLine();
 
         foreach (var item in order.Items)
         {
             text.AppendLine(
                 $"• {item.ProductName} — {item.TotalQuantity} ədəd");
+
+            text.AppendLine(
+                $"  Hazır: {item.ReadyQuantity} | " +
+                $"Çatdırılıb: {item.DeliveredQuantity} | " +
+                $"Qalıb: {item.RemainingQuantity}");
 
             if (item.SpecialOrderQuantity > 0)
             {
@@ -1775,6 +1909,21 @@ public class TelegramUpdateHandler
         }
 
         var rows = new List<InlineKeyboardButton[]>();
+
+        if (order.ContainsSpecialOrder &&
+            order.Items.All(item => item.DeliveredQuantity == 0) &&
+            order.Status is OrderStatus.Confirmed or OrderStatus.Preparing)
+        {
+            rows.Add(
+            [
+                InlineKeyboardButton.WithCallbackData(
+                    "⏳ Hamısını birlikdə",
+                    $"admin:delivery-mode:all:{orderNumber}"),
+                InlineKeyboardButton.WithCallbackData(
+                    "🚚 Hissə-hissə",
+                    $"admin:delivery-mode:partial:{orderNumber}")
+            ]);
+        }
 
         foreach (var item in order.Items.Where(
                      item => item.SpecialOrderQuantity > 0))
@@ -1819,26 +1968,56 @@ public class TelegramUpdateHandler
                 break;
 
             case OrderStatus.Preparing:
-                rows.Add(
-                [
-                    InlineKeyboardButton.WithCallbackData(
-                    "🚚 Çatdırılır",
-                    $"admin:delivering:{orderNumber}"),
+                if (order.FulfillmentStatus != FulfillmentStatus.PartiallyDelivered)
+                {
+                    rows.Add(
+                    [
+                        InlineKeyboardButton.WithCallbackData(
+                            "❌ Ləğv et",
+                            $"admin:cancel:{orderNumber}")
+                    ]);
+                }
+                break;
+        }
 
+        if (order.ReadyQuantity > 0 &&
+            (order.ReadyQuantity == order.RemainingQuantity ||
+             order.DeliveryMode == DeliveryMode.PartialAllowed) &&
+            order.Status is not OrderStatus.PendingAdminApproval &&
+            order.Status is not OrderStatus.Completed &&
+            order.Status is not OrderStatus.Cancelled)
+        {
+            var label = order.ReadyQuantity == order.RemainingQuantity
+                ? "🚚 Hamısını çatdır"
+                : $"🚚 Hazır olan {order.ReadyQuantity} ədədi çatdır";
+
+            rows.Add(
+            [
                 InlineKeyboardButton.WithCallbackData(
-                    "❌ Ləğv et",
-                    $"admin:cancel:{orderNumber}")
-                ]);
-                break;
+                    label,
+                    $"admin:deliver-ready:{orderNumber}")
+            ]);
+        }
 
-            case OrderStatus.Delivering:
-                rows.Add(
-                [
-                    InlineKeyboardButton.WithCallbackData(
-                    "✅ Tamamla",
-                    $"admin:complete:{orderNumber}")
-                ]);
-                break;
+        if (order.RemainingQuantity > 0 &&
+            order.FulfillmentStatus == FulfillmentStatus.PartiallyDelivered)
+        {
+            rows.Add(
+            [
+                InlineKeyboardButton.WithCallbackData(
+                    "❌ Qalan hissəni ləğv et",
+                    $"admin:cancel-remaining:{orderNumber}")
+            ]);
+        }
+
+        if (otherOrders.Count > 0)
+        {
+            rows.Add(
+            [
+                InlineKeyboardButton.WithCallbackData(
+                    "📜 Müştərinin digər sifarişləri",
+                    $"admin:customer-orders:{orderNumber}")
+            ]);
         }
 
         rows.Add(
@@ -1957,8 +2136,8 @@ public class TelegramUpdateHandler
             if (item.SpecialOrderQuantity > 0)
             {
                 text.AppendLine(
-                    $"  Sifarişlə gətiriləcək: " +
-                    $"{item.SpecialOrderQuantity}");
+                    $"  Çatdırılıb: {item.DeliveredQuantity}, " +
+                    $"qalıb: {item.RemainingQuantity}");
             }
         }
 
@@ -2019,6 +2198,16 @@ public class TelegramUpdateHandler
                 "Ləğv edildi",
 
             _ => status.ToString()
+        };
+    }
+
+    private static string GetDeliveryModeText(DeliveryMode deliveryMode)
+    {
+        return deliveryMode switch
+        {
+            DeliveryMode.AllTogether => "Hamısı birlikdə",
+            DeliveryMode.PartialAllowed => "Hissə-hissə",
+            _ => "Admin qərarı gözlənilir"
         };
     }
     private async Task SendCustomerMainMenuAsync(long chatId)

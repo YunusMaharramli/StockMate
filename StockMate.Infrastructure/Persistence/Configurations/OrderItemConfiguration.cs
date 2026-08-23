@@ -36,12 +36,20 @@ public class OrderItemConfiguration : IEntityTypeConfiguration<OrderItem>
         builder.Property(item => item.SpecialOrderQuantity)
             .IsRequired();
 
+        builder.Property(item => item.DeliveredQuantity)
+            .IsRequired();
+
+        builder.Property(item => item.CancelledQuantity)
+            .IsRequired();
+
         builder.Property(item => item.SpecialOrderStatus)
             .HasConversion<int>()
             .IsRequired();
 
         builder.Ignore(item => item.TotalQuantity);
         builder.Ignore(item => item.LineTotal);
+        builder.Ignore(item => item.RemainingQuantity);
+        builder.Ignore(item => item.ReadyQuantity);
 
         builder.HasIndex(item => new
         {
