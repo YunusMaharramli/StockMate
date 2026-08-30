@@ -205,6 +205,165 @@ public class OrderTests
         Assert.Equal(0, Assert.Single(order.Items).DeliveredQuantity);
     }
 
+    [Fact]
+    public void DeliverShipmentItems_ShouldDeliverExactQuantity()
+    {
+        var order = CreateOrder();
+        var product = CreateProduct(stockQuantity: 5);
+        order.AddItem(product, 5, 0);
+        order.Confirm();
+        order.MarkAsPreparing();
+
+        var item = Assert.Single(order.Items);
+        order.DeliverShipmentItems(new Dictionary<Guid, int>
+        {
+            [item.Id] = 2
+        });
+
+        Assert.Equal(2, item.DeliveredQuantity);
+        Assert.Equal(3, item.RemainingQuantity);
+        Assert.Equal(OrderStatus.Preparing, order.Status);
+    }
+
+    [Fact]
+    public void DeliverShipmentItems_ShouldCompleteOrder_WhenEverythingIsDelivered()
+    {
+        var order = CreateOrder();
+        var product = CreateProduct(stockQuantity: 2);
+        order.AddItem(product, 2, 0);
+        order.Confirm();
+        order.MarkAsPreparing();
+
+        var item = Assert.Single(order.Items);
+        order.DeliverShipmentItems(new Dictionary<Guid, int>
+        {
+            [item.Id] = 2
+        });
+
+        Assert.Equal(OrderStatus.Completed, order.Status);
+        Assert.Equal(FulfillmentStatus.FullyDelivered, order.FulfillmentStatus);
+    }
+
+    [Fact]
+    public void DeliverShipmentItems_ShouldRejectQuantityGreaterThanReady()
+    {
+        var order = CreateOrder();
+        var product = CreateProduct(stockQuantity: 2);
+        order.AddItem(product, 2, 0);
+        order.Confirm();
+        order.MarkAsPreparing();
+
+        var item = Assert.Single(order.Items);
+        Assert.Throws<InvalidOperationException>(() =>
+            order.DeliverShipmentItems(new Dictionary<Guid, int>
+            {
+                [item.Id] = 3
+            }));
+        Assert.Equal(0, item.DeliveredQuantity);
+    }
+    [Fact]
+    public void SelectDeliveryDetails_ShouldSaveAddressAndCompany()
+    {
+        var customerId = Guid.NewGuid();
+
+        var order = new Order(
+            customerId,
+            "0501234567",
+            "Müvəqqəti ünvan");
+
+        var address = new CustomerAddress(
+            customerId,
+            "Nizami küçəsi 42",
+            40.4093,
+            49.8671);
+
+        var company = new DeliveryCompany(
+            "Bolt Delivery");
+
+        order.SelectDeliveryDetails(
+            address,
+            company);
+
+        Assert.Equal(address.Id, order.CustomerAddressId);
+        Assert.Equal(
+            "Nizami küçəsi 42",
+            order.DeliveryAddress);
+        Assert.Equal(40.4093, order.Latitude);
+        Assert.Equal(49.8671, order.Longitude);
+        Assert.Equal(company.Id, order.DeliveryCompanyId);
+        Assert.Equal(
+            "Bolt Delivery",
+            order.DeliveryCompanyName);
+    }
+    [Fact]
+    public void SelectDeliveryDetails_ShouldThrow_WhenAddressBelongsToAnotherCustomer()
+    {
+        var order = new Order(
+            Guid.NewGuid(),
+            "0501234567",
+            "Müvəqqəti ünvan");
+
+        var address = new CustomerAddress(
+            Guid.NewGuid(),
+            "Başqa müştərinin ünvanı");
+
+        var company = new DeliveryCompany(
+            "Bolt Delivery");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            order.SelectDeliveryDetails(
+                address,
+                company));
+    }
+    [Fact]
+    public void SelectDeliveryDetails_ShouldThrow_WhenAddressIsInactive()
+    {
+        var customerId = Guid.NewGuid();
+
+        var order = new Order(
+            customerId,
+            "0501234567",
+            "Müvəqqəti ünvan");
+
+        var address = new CustomerAddress(
+            customerId,
+            "Nizami küçəsi 42");
+
+        address.Deactivate();
+
+        var company = new DeliveryCompany(
+            "Bolt Delivery");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            order.SelectDeliveryDetails(
+                address,
+                company));
+    }
+    [Fact]
+    public void SelectDeliveryDetails_ShouldThrow_WhenCompanyIsInactive()
+    {
+        var customerId = Guid.NewGuid();
+
+        var order = new Order(
+            customerId,
+            "0501234567",
+            "Müvəqqəti ünvan");
+
+        var address = new CustomerAddress(
+            customerId,
+            "Nizami küçəsi 42");
+
+        var company = new DeliveryCompany(
+            "Bolt Delivery");
+
+        company.Deactivate();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            order.SelectDeliveryDetails(
+                address,
+                company));
+    }
+
     private static Order CreateOrder()
     {
         return new Order(

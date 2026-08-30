@@ -3,10 +3,15 @@ using StockMate.Application.Carts.Models;
 using StockMate.Application.Carts.Services;
 using StockMate.Application.Customers.Models;
 using StockMate.Application.Customers.Services;
+using StockMate.Application.DeliveryCompanies.Services;
 using StockMate.Application.Orders.Models;
 using StockMate.Application.Orders.Services;
 using StockMate.Application.Products.Models;
 using StockMate.Application.Products.Services;
+using StockMate.Application.Shipments.Models;
+using StockMate.Application.Shipments.Services;
+using StockMate.Application.Staff.Models;
+using StockMate.Application.Staff.Services;
 using StockMate.Bot.Options;
 using StockMate.Bot.Telegram.State;
 using StockMate.Domain.Enums;
@@ -22,30 +27,45 @@ public class TelegramUpdateHandler
 {
     private readonly TelegramBotClient _botClient;
     private readonly ICustomerService _customerService;
+    private readonly ICustomerAddressService _customerAddressService;
+    private readonly IDeliveryCompanyService _deliveryCompanyService;
     private readonly ILogger<TelegramUpdateHandler> _logger;
     private readonly IProductService _productService;
     private readonly ICartService _cartService;
     private readonly TelegramSessionStore _sessionStore;
     private readonly IOrderService _orderService;
+    private readonly IStaffService _staffService;
+    private readonly IOrderAssignmentService _assignmentService;
+    private readonly IShipmentService _shipmentService;
     private readonly TelegramOptions _telegramOptions;
 
     public TelegramUpdateHandler(
     TelegramBotClient botClient,
     ICustomerService customerService,
+    ICustomerAddressService customerAddressService,
+    IDeliveryCompanyService deliveryCompanyService,
     IProductService productService,
     ICartService cartService,
     TelegramSessionStore sessionStore,
     IOrderService orderService,
+    IStaffService staffService,
+    IOrderAssignmentService assignmentService,
+    IShipmentService shipmentService,
     IOptions<TelegramOptions> telegramOptions,
     ILogger<TelegramUpdateHandler> logger)
     {
         _botClient = botClient;
         _customerService = customerService;
+        _customerAddressService = customerAddressService;
+        _deliveryCompanyService = deliveryCompanyService;
         _productService = productService;
         _cartService = cartService;
         _logger = logger;
         _sessionStore = sessionStore;
         _orderService = orderService;
+        _staffService = staffService;
+        _assignmentService = assignmentService;
+        _shipmentService = shipmentService;
         _telegramOptions = telegramOptions.Value;
     }
 
@@ -92,10 +112,10 @@ public class TelegramUpdateHandler
             return;
         }
 
-        if (await TryHandleAdminInputAsync(message))
+        if (await TryHandleCustomerInputAsync(message))
             return;
 
-        if (await TryHandleCheckoutMessageAsync(message))
+        if (await TryHandleAdminInputAsync(message))
             return;
 
         if (await TryHandleCheckoutMessageAsync(message))
@@ -141,6 +161,7 @@ public class TelegramUpdateHandler
 
         if (query.Data == "menu:cart")
         {
+            _sessionStore.Clear(telegramUserId);
             await SendCartAsync(telegramUserId, chatId);
             return;
         }
@@ -190,8 +211,23 @@ public class TelegramUpdateHandler
         }
         if (query.Data == "order:confirm-checkout")
         {
+            if (!_sessionStore.TryGet(telegramUserId, out var checkoutSession) ||
+                checkoutSession?.CustomerAddressId is not Guid customerAddressId ||
+                checkoutSession.DeliveryCompanyId is not Guid deliveryCompanyId)
+            {
+                await _botClient.SendMessage(
+                    chatId,
+                    "Çatdırılma seçimi tamamlanmayıb. Ünvanı yenidən seçin.");
+                await BeginCheckoutAsync(telegramUserId, chatId);
+                return;
+            }
+
             var order = await _orderService.CheckoutAsync(
-                telegramUserId);
+                telegramUserId,
+                customerAddressId,
+                deliveryCompanyId);
+
+            _sessionStore.Clear(telegramUserId);
 
             await _botClient.SendMessage(
                 chatId,
@@ -222,6 +258,100 @@ public class TelegramUpdateHandler
                     query.Message,
                     productId,
                     quantity);
+            }
+
+            return;
+        }
+
+        if (query.Data.StartsWith("checkout:address:"))
+        {
+            var idText = query.Data["checkout:address:".Length..];
+            if (Guid.TryParse(idText, out var addressId))
+            {
+                var addresses = await _customerAddressService.GetActiveAsync(
+                    telegramUserId);
+                if (addresses.All(address => address.Id != addressId))
+                {
+                    await _botClient.SendMessage(
+                        chatId,
+                        "Bu ünvan artıq aktiv deyil. Başqa ünvan seçin.");
+                    await ShowAddressSelectionAsync(telegramUserId, chatId);
+                    return;
+                }
+
+                var session = _sessionStore.GetOrCreate(telegramUserId);
+                session.CustomerAddressId = addressId;
+                session.DeliveryCompanyId = null;
+                session.CheckoutStep = CheckoutStep.SelectingDeliveryCompany;
+                await ShowDeliveryCompanySelectionAsync(telegramUserId, chatId);
+            }
+
+            return;
+        }
+
+        if (query.Data == "checkout:new-address")
+        {
+            await PromptForNewAddressAsync(telegramUserId, chatId);
+            return;
+        }
+
+        if (query.Data == "checkout:back-address")
+        {
+            await ShowAddressSelectionAsync(telegramUserId, chatId);
+            return;
+        }
+
+        if (query.Data.StartsWith("checkout:company:"))
+        {
+            var idText = query.Data["checkout:company:".Length..];
+            if (Guid.TryParse(idText, out var companyId))
+            {
+                var companies = await _deliveryCompanyService.GetActiveAsync();
+                if (companies.All(company => company.Id != companyId))
+                {
+                    await _botClient.SendMessage(
+                        chatId,
+                        "Bu çatdırılma şirkəti artıq aktiv deyil. Başqa şirkət seçin.");
+                    await ShowDeliveryCompanySelectionAsync(telegramUserId, chatId);
+                    return;
+                }
+
+                var session = _sessionStore.GetOrCreate(telegramUserId);
+                if (session.CustomerAddressId is null)
+                {
+                    await ShowAddressSelectionAsync(telegramUserId, chatId);
+                    return;
+                }
+
+                session.DeliveryCompanyId = companyId;
+                session.CheckoutStep = CheckoutStep.AwaitingConfirmation;
+                await ShowCheckoutConfirmationAsync(telegramUserId, chatId);
+            }
+
+            return;
+        }
+
+        if (query.Data == "checkout:cancel")
+        {
+            _sessionStore.Clear(telegramUserId);
+            await _botClient.SendMessage(chatId, "Sifarişin rəsmiləşdirilməsi dayandırıldı.");
+            await SendCartAsync(telegramUserId, chatId);
+            return;
+        }
+        if (query.Data.StartsWith("product:quantity:"))
+        {
+            var idText = query.Data["product:quantity:".Length..];
+
+            if (Guid.TryParse(idText, out var productId))
+            {
+                var session = _sessionStore.GetOrCreate(telegramUserId);
+                session.CustomerInputStep = CustomerInputStep.AwaitingProductQuantity;
+                session.CustomerProductId = productId;
+
+                await _botClient.SendMessage(
+                    chatId,
+                    "Məhsul sayını rəqəmlə yazın (1–99).\n" +
+                    "Ləğv etmək üçün /cancel yazın.");
             }
 
             return;
@@ -679,6 +809,133 @@ public class TelegramUpdateHandler
             return;
         }
 
+        if (query.Data == "admin:staff")
+        {
+            await SendAdminStaffListAsync(chatId);
+            return;
+        }
+
+        if (query.Data == "admin:staff:add")
+        {
+            var session = _sessionStore.GetOrCreate(telegramUserId);
+            session.AdminInputStep = AdminInputStep.AwaitingWorkerTelegramId;
+            session.WorkerTelegramUserId = null;
+            session.WorkerFirstName = null;
+            session.WorkerLastName = null;
+
+            await _botClient.SendMessage(
+                chatId,
+                "İşçinin Telegram ID-sini yazın.\n\n" +
+                "İşçi öz botunda /myid yazaraq ID-ni görə bilər.\n" +
+                "Ləğv etmək üçün /cancel yazın.");
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:staff:view:"))
+        {
+            if (Guid.TryParse(query.Data["admin:staff:view:".Length..], out var staffId))
+                await SendAdminStaffDetailAsync(chatId, staffId);
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:staff:on:"))
+        {
+            if (Guid.TryParse(query.Data["admin:staff:on:".Length..], out var staffId))
+            {
+                await _staffService.ActivateAsync(staffId);
+                await SendAdminStaffDetailAsync(chatId, staffId);
+            }
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:staff:off:"))
+        {
+            if (Guid.TryParse(query.Data["admin:staff:off:".Length..], out var staffId))
+            {
+                await _staffService.DeactivateAsync(staffId);
+                await SendAdminStaffDetailAsync(chatId, staffId);
+            }
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:aw:"))
+        {
+            if (long.TryParse(query.Data["admin:aw:".Length..], out var orderNumber))
+                await SendWorkerSelectionAsync(chatId, orderNumber);
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:a:"))
+        {
+            var parts = query.Data.Split(':');
+            if (parts.Length == 4 &&
+                long.TryParse(parts[2], out var orderNumber) &&
+                Guid.TryParse(parts[3], out var workerId))
+            {
+                var admin = await GetRequiredAdminStaffAsync(telegramUserId);
+                await _assignmentService.AssignAsync(orderNumber, workerId, admin.Id);
+                await _botClient.SendMessage(chatId, "✅ Sifariş işçiyə təyin edildi.");
+                await SendAdminOrderActionsAsync(chatId, orderNumber);
+            }
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:unassign:"))
+        {
+            if (long.TryParse(query.Data["admin:unassign:".Length..], out var orderNumber))
+            {
+                var admin = await GetRequiredAdminStaffAsync(telegramUserId);
+                await _assignmentService.ReleaseAsync(orderNumber, admin.Id);
+                await _botClient.SendMessage(chatId, "✅ İşçi təyinatı ləğv edildi.");
+                await SendAdminOrderActionsAsync(chatId, orderNumber);
+            }
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:ship:new:"))
+        {
+            if (long.TryParse(query.Data["admin:ship:new:".Length..], out var orderNumber))
+            {
+                var admin = await GetRequiredAdminStaffAsync(telegramUserId);
+                var assignment = await _assignmentService.GetOrderAssignmentAsync(orderNumber)
+                    ?? throw new InvalidOperationException("Sifariş əvvəlcə işçiyə təyin edilməlidir.");
+
+                await _shipmentService.CreateReadyShipmentAsync(
+                    orderNumber, assignment.StaffId, admin.Id);
+                await _botClient.SendMessage(chatId, "✅ Hazır məhsullar üçün göndəriş yaradıldı.");
+                await SendAdminShipmentsAsync(chatId, orderNumber);
+            }
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:ss:"))
+        {
+            var parts = query.Data.Split(':');
+            if (parts.Length == 4 && Guid.TryParse(parts[3], out var shipmentId))
+            {
+                var status = parts[2] switch
+                {
+                    "p" => ShipmentStatus.Preparing,
+                    "r" => ShipmentStatus.Ready,
+                    "o" => ShipmentStatus.OutForDelivery,
+                    "d" => ShipmentStatus.Delivered,
+                    "c" => ShipmentStatus.Cancelled,
+                    _ => throw new InvalidOperationException("Naməlum göndəriş statusu.")
+                };
+                var admin = await GetRequiredAdminStaffAsync(telegramUserId);
+                var shipment = await _shipmentService.ChangeStatusAsync(shipmentId, admin.Id, status);
+                await SendAdminShipmentsAsync(chatId, shipment.OrderNumber);
+            }
+            return;
+        }
+
+        if (query.Data.StartsWith("admin:ships:"))
+        {
+            if (long.TryParse(query.Data["admin:ships:".Length..], out var orderNumber))
+                await SendAdminShipmentsAsync(chatId, orderNumber);
+            return;
+        }
+
         if (query.Data == "admin:orders:new")
         {
             var orders = await _orderService.GetNewOrdersAsync();
@@ -1077,6 +1334,7 @@ public class TelegramUpdateHandler
         }
         if (query.Data == "menu:main")
         {
+            _sessionStore.Clear(telegramUserId);
             await SendCustomerMainMenuAsync(chatId);
             return;
         }
@@ -1133,18 +1391,50 @@ public class TelegramUpdateHandler
     {
         var user = message.From!;
 
+        if (user.Id == _telegramOptions.AdminUserId)
+        {
+            await _staffService.EnsureAdminAsync(
+                user.Id,
+                user.FirstName,
+                user.LastName,
+                user.Username);
+
+            await SendAdminMainMenuAsync(message.Chat.Id);
+            return;
+        }
+
+        var staff = await _staffService.GetByTelegramUserIdAsync(user.Id);
+        if (staff?.Role == StaffRole.Worker)
+        {
+            if (!staff.IsActive)
+            {
+                await _botClient.SendMessage(
+                    message.Chat.Id,
+                    "İşçi hesabınız hazırda passivdir. Adminlə əlaqə saxlayın.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_telegramOptions.MiniAppUrl))
+            {
+                await _botClient.SendMessage(
+                    message.Chat.Id,
+                    "İşçi paneli hələ yayımlanmayıb.");
+                return;
+            }
+
+            await _botClient.SendMessage(
+                message.Chat.Id,
+                "Tapşırıqlarınızı Mini App panelindən idarə edin.",
+                replyMarkup: BuildMiniAppKeyboard("👷 İşçi panelini aç"));
+            return;
+        }
+
         await _customerService.CreateOrUpdateAsync(
             new UpsertCustomerRequest(
                 user.Id,
                 user.FirstName,
                 user.LastName,
                 user.Username));
-
-        if (user.Id == _telegramOptions.AdminUserId)
-        {
-            await SendAdminMainMenuAsync(message.Chat.Id);
-            return;
-        }
 
         await SendCustomerMainMenuAsync(message.Chat.Id);
     }
@@ -1485,8 +1775,8 @@ public class TelegramUpdateHandler
                 $"product:qty:{product.Id}:{Math.Max(1, quantity - 1)}"),
 
             InlineKeyboardButton.WithCallbackData(
-                quantity.ToString(),
-                "product:quantity"),
+                $"✏️ {quantity}",
+                $"product:quantity:{product.Id}"),
 
             InlineKeyboardButton.WithCallbackData(
                 "➕",
@@ -1528,8 +1818,7 @@ public class TelegramUpdateHandler
             ?? throw new KeyNotFoundException(
                 "Customer was not found.");
 
-        if (string.IsNullOrWhiteSpace(customer.PhoneNumber) ||
-    string.IsNullOrWhiteSpace(customer.DeliveryAddress))
+        if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
         {
             var session = _sessionStore.GetOrCreate(telegramUserId);
 
@@ -1563,13 +1852,45 @@ public class TelegramUpdateHandler
             return;
         }
 
-        await ShowCheckoutConfirmationAsync(
-            telegramUserId,
-            chatId);
-
-        var cart = await _cartService.GetAsync(telegramUserId);
-
+        await ShowAddressSelectionAsync(telegramUserId, chatId);
     }
+    private async Task<bool> TryHandleCustomerInputAsync(Message message)
+    {
+        var telegramUserId = message.From!.Id;
+
+        if (!_sessionStore.TryGet(telegramUserId, out var session) ||
+            session is null ||
+            session.CustomerInputStep == CustomerInputStep.None)
+        {
+            return false;
+        }
+
+        if (session.CustomerInputStep == CustomerInputStep.AwaitingProductQuantity)
+        {
+            if (session.CustomerProductId is null)
+            {
+                _sessionStore.Clear(telegramUserId);
+                return false;
+            }
+
+            if (!int.TryParse(message.Text?.Trim(), out var quantity) ||
+                quantity is < 1 or > 99)
+            {
+                await _botClient.SendMessage(
+                    message.Chat.Id,
+                    "Miqdarı 1–99 aralığında tam rəqəm kimi yazın.");
+                return true;
+            }
+
+            var productId = session.CustomerProductId.Value;
+            _sessionStore.Clear(telegramUserId);
+            await SendProductDetailAsync(message.Chat.Id, productId, quantity);
+            return true;
+        }
+
+        return false;
+    }
+
     private async Task<bool> TryHandleCheckoutMessageAsync(
     Message message)
     {
@@ -1618,14 +1939,119 @@ public class TelegramUpdateHandler
             }
 
             session.PhoneNumber = phoneNumber;
-            session.CheckoutStep =
-                CheckoutStep.AwaitingAddress;
+
+            if (session.ContinueToCheckout)
+            {
+                var customer = await _customerService.GetByTelegramUserIdAsync(
+                    telegramUserId)
+                    ?? throw new KeyNotFoundException("Customer was not found.");
+                var addresses = await _customerAddressService.GetActiveAsync(
+                    telegramUserId);
+                var contactAddress = addresses.FirstOrDefault();
+
+                if (contactAddress is not null)
+                {
+                    await _customerService.UpdateContactInformationAsync(
+                        telegramUserId,
+                        new UpdateContactInformationRequest(
+                            phoneNumber,
+                            contactAddress.AddressLine,
+                            contactAddress.Latitude,
+                            contactAddress.Longitude));
+                    await _botClient.SendMessage(
+                        message.Chat.Id,
+                        "✅ Telefon nömrəsi saxlanıldı.",
+                        replyMarkup: new ReplyKeyboardRemove());
+                    await ShowAddressSelectionAsync(
+                        telegramUserId,
+                        message.Chat.Id);
+                    return true;
+                }
+
+                session.CheckoutStep = CheckoutStep.AwaitingNewAddress;
+                await _botClient.SendMessage(
+                    message.Chat.Id,
+                    "📍 Çatdırılma ünvanını mətnlə yazın.",
+                    replyMarkup: new ReplyKeyboardRemove());
+                return true;
+            }
+
+            session.CheckoutStep = CheckoutStep.AwaitingAddress;
 
             await _botClient.SendMessage(
                 message.Chat.Id,
                 "📍 Çatdırılma ünvanını mətnlə yazın.",
                 replyMarkup: new ReplyKeyboardRemove());
 
+            return true;
+        }
+
+        if (session.CheckoutStep == CheckoutStep.AwaitingNewAddress)
+        {
+            if (string.IsNullOrWhiteSpace(message.Text))
+            {
+                await _botClient.SendMessage(
+                    message.Chat.Id,
+                    "Ünvanı mətn şəklində yazın.");
+                return true;
+            }
+
+            session.DeliveryAddress = message.Text.Trim();
+            session.CheckoutStep = CheckoutStep.AwaitingNewLocation;
+            await SendLocationRequestAsync(
+                message.Chat.Id,
+                "Yeni ünvan üçün lokasiyanı paylaşın və ya lokasiyasız davam edin.");
+            return true;
+        }
+
+        if (session.CheckoutStep == CheckoutStep.AwaitingNewLocation)
+        {
+            var skipLocation = message.Text?.Equals(
+                "Lokasiyasız davam et",
+                StringComparison.OrdinalIgnoreCase) == true;
+
+            if (message.Location is null && !skipLocation)
+            {
+                await _botClient.SendMessage(
+                    message.Chat.Id,
+                    "Lokasiyanı paylaşın və ya “Lokasiyasız davam et” seçin.");
+                return true;
+            }
+
+            var customer = await _customerService.GetByTelegramUserIdAsync(
+                telegramUserId)
+                ?? throw new KeyNotFoundException("Customer was not found.");
+            var phoneNumber = session.PhoneNumber ?? customer.PhoneNumber
+                ?? throw new InvalidOperationException("Phone number is required.");
+            var addressLine = session.DeliveryAddress
+                ?? throw new InvalidOperationException("Delivery address is required.");
+
+            var address = await _customerAddressService.CreateAsync(
+                telegramUserId,
+                new CreateCustomerAddressRequest(
+                    addressLine,
+                    message.Location?.Latitude,
+                    message.Location?.Longitude));
+
+            await _customerService.UpdateContactInformationAsync(
+                telegramUserId,
+                new UpdateContactInformationRequest(
+                    phoneNumber,
+                    address.AddressLine,
+                    address.Latitude,
+                    address.Longitude));
+
+            session.CustomerAddressId = address.Id;
+            session.DeliveryCompanyId = null;
+            session.CheckoutStep = CheckoutStep.SelectingDeliveryCompany;
+
+            await _botClient.SendMessage(
+                message.Chat.Id,
+                "✅ Yeni ünvan saxlanıldı.",
+                replyMarkup: new ReplyKeyboardRemove());
+            await ShowDeliveryCompanySelectionAsync(
+                telegramUserId,
+                message.Chat.Id);
             return true;
         }
 
@@ -1644,30 +2070,9 @@ public class TelegramUpdateHandler
             session.CheckoutStep =
                 CheckoutStep.AwaitingLocation;
 
-            var locationKeyboard = new ReplyKeyboardMarkup(
-                new[]
-                {
-                new[]
-                {
-                    new KeyboardButton("📍 Lokasiyanı paylaş")
-                    {
-                        RequestLocation = true
-                    }
-                },
-                new[]
-                {
-                    new KeyboardButton("Lokasiyasız davam et")
-                }
-                })
-            {
-                ResizeKeyboard = true,
-                OneTimeKeyboard = true
-            };
-
-            await _botClient.SendMessage(
+            await SendLocationRequestAsync(
                 message.Chat.Id,
-                "İstəsəniz dəqiq lokasiyanı paylaşın.",
-                replyMarkup: locationKeyboard);
+                "İstəsəniz dəqiq lokasiyanı paylaşın.");
 
             return true;
         }
@@ -1709,9 +2114,7 @@ public class TelegramUpdateHandler
 
             if (continueToCheckout)
             {
-                await ShowCheckoutConfirmationAsync(
-                    telegramUserId,
-                    message.Chat.Id);
+                await ShowAddressSelectionAsync(telegramUserId, message.Chat.Id);
             }
             else
             {
@@ -1725,9 +2128,134 @@ public class TelegramUpdateHandler
 
         return false;
     }
+    private async Task ShowAddressSelectionAsync(
+        long telegramUserId,
+        long chatId)
+    {
+        var addresses = await _customerAddressService.GetActiveAsync(
+            telegramUserId);
+        var session = _sessionStore.GetOrCreate(telegramUserId);
+        session.CheckoutStep = CheckoutStep.SelectingAddress;
+        session.CustomerAddressId = null;
+        session.DeliveryCompanyId = null;
+
+        if (addresses.Count == 0)
+        {
+            await _botClient.SendMessage(
+                chatId,
+                "Saxlanmış aktiv ünvanınız yoxdur. Yeni ünvan əlavə edin.");
+            await PromptForNewAddressAsync(telegramUserId, chatId);
+            return;
+        }
+
+        var rows = addresses
+            .Select(address => new[]
+            {
+                InlineKeyboardButton.WithCallbackData(
+                    $"📍 {Truncate(address.AddressLine, 45)}",
+                    $"checkout:address:{address.Id}")
+            })
+            .ToList();
+
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData(
+                "➕ Yeni ünvan əlavə et",
+                "checkout:new-address")
+        ]);
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData(
+                "❌ İmtina et",
+                "checkout:cancel")
+        ]);
+
+        await _botClient.SendMessage(
+            chatId,
+            "Sifariş üçün çatdırılma ünvanını seçin:",
+            replyMarkup: new InlineKeyboardMarkup(rows));
+    }
+
+    private async Task PromptForNewAddressAsync(
+        long telegramUserId,
+        long chatId)
+    {
+        var session = _sessionStore.GetOrCreate(telegramUserId);
+        session.CheckoutStep = CheckoutStep.AwaitingNewAddress;
+        session.DeliveryAddress = null;
+        session.CustomerAddressId = null;
+        session.DeliveryCompanyId = null;
+
+        await _botClient.SendMessage(
+            chatId,
+            "📍 Yeni çatdırılma ünvanını mətnlə yazın.\n" +
+            "Ləğv etmək üçün /cancel yazın.",
+            replyMarkup: new ReplyKeyboardRemove());
+    }
+
+    private async Task ShowDeliveryCompanySelectionAsync(
+        long telegramUserId,
+        long chatId)
+    {
+        var companies = await _deliveryCompanyService.GetActiveAsync();
+        var session = _sessionStore.GetOrCreate(telegramUserId);
+
+        if (session.CustomerAddressId is null)
+        {
+            await ShowAddressSelectionAsync(telegramUserId, chatId);
+            return;
+        }
+
+        session.CheckoutStep = CheckoutStep.SelectingDeliveryCompany;
+        session.DeliveryCompanyId = null;
+
+        if (companies.Count == 0)
+        {
+            await _botClient.SendMessage(
+                chatId,
+                "Hazırda aktiv çatdırılma şirkəti yoxdur. Sonra yenidən cəhd edin.",
+                replyMarkup: new InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton.WithCallbackData(
+                        "⬅️ Ünvan seçiminə qayıt",
+                        "checkout:back-address")],
+                    [InlineKeyboardButton.WithCallbackData(
+                        "❌ İmtina et",
+                        "checkout:cancel")]
+                ]));
+            return;
+        }
+
+        var rows = companies
+            .Select(company => new[]
+            {
+                InlineKeyboardButton.WithCallbackData(
+                    $"🚚 {Truncate(company.Name, 48)}",
+                    $"checkout:company:{company.Id}")
+            })
+            .ToList();
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData(
+                "⬅️ Ünvan seçiminə qayıt",
+                "checkout:back-address")
+        ]);
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData(
+                "❌ İmtina et",
+                "checkout:cancel")
+        ]);
+
+        await _botClient.SendMessage(
+            chatId,
+            "Çatdırılma şirkətini seçin:",
+            replyMarkup: new InlineKeyboardMarkup(rows));
+    }
+
     private async Task ShowCheckoutConfirmationAsync(
-    long telegramUserId,
-    long chatId)
+        long telegramUserId,
+        long chatId)
     {
         var customer =
             await _customerService.GetByTelegramUserIdAsync(
@@ -1736,13 +2264,46 @@ public class TelegramUpdateHandler
                 "Customer was not found.");
 
         var cart = await _cartService.GetAsync(telegramUserId);
+        if (!_sessionStore.TryGet(telegramUserId, out var session) ||
+            session?.CustomerAddressId is not Guid addressId ||
+            session.DeliveryCompanyId is not Guid companyId)
+        {
+            await ShowAddressSelectionAsync(telegramUserId, chatId);
+            return;
+        }
+
+        var address = (await _customerAddressService.GetActiveAsync(
+                telegramUserId))
+            .FirstOrDefault(item => item.Id == addressId);
+        if (address is null)
+        {
+            await _botClient.SendMessage(
+                chatId,
+                "Seçilmiş ünvan artıq aktiv deyil.");
+            await ShowAddressSelectionAsync(telegramUserId, chatId);
+            return;
+        }
+
+        var company = (await _deliveryCompanyService.GetActiveAsync())
+            .FirstOrDefault(item => item.Id == companyId);
+        if (company is null)
+        {
+            await _botClient.SendMessage(
+                chatId,
+                "Seçilmiş çatdırılma şirkəti artıq aktiv deyil.");
+            await ShowDeliveryCompanySelectionAsync(telegramUserId, chatId);
+            return;
+        }
+
+        session.CheckoutStep = CheckoutStep.AwaitingConfirmation;
 
         await _botClient.SendMessage(
             chatId,
             $"Sifarişi təsdiqləyirsiniz?\n\n" +
             $"Məbləğ: {cart.ProductsTotal:0.00} AZN\n" +
             $"Telefon: {customer.PhoneNumber}\n" +
-            $"Ünvan: {customer.DeliveryAddress}\n\n" +
+            $"Ünvan: {address.AddressLine}\n" +
+            $"Çatdırılma şirkəti: {company.Name}\n\n" +
             "Çatdırılma haqqı adminlə razılaşdırılacaq.",
             replyMarkup: new InlineKeyboardMarkup(
                 new[]
@@ -1754,22 +2315,57 @@ public class TelegramUpdateHandler
                         "order:confirm-checkout"),
 
                     InlineKeyboardButton.WithCallbackData(
-                        "❌ İmtina et",
-                        "menu:cart")
+                        "⬅️ Dəyiş",
+                        "checkout:back-address")
                 },
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData(
-                        "🏠 Ana menyu",
-                        "menu:main")
+                        "❌ İmtina et",
+                        "checkout:cancel")
                 }
                 }));
     }
+
+    private async Task SendLocationRequestAsync(long chatId, string text)
+    {
+        var locationKeyboard = new ReplyKeyboardMarkup(
+        [
+            [new KeyboardButton("📍 Lokasiyanı paylaş") { RequestLocation = true }],
+            [new KeyboardButton("Lokasiyasız davam et")]
+        ])
+        {
+            ResizeKeyboard = true,
+            OneTimeKeyboard = true
+        };
+
+        await _botClient.SendMessage(
+            chatId,
+            text,
+            replyMarkup: locationKeyboard);
+    }
+
+    private static string Truncate(string value, int maximumLength)
+    {
+        var normalized = value.Trim();
+        return normalized.Length <= maximumLength
+            ? normalized
+            : $"{normalized[..(maximumLength - 1)]}…";
+    }
     private async Task SendNewOrderToAdminAsync(OrderDto order)
     {
+        var customer = await _customerService.GetByIdAsync(order.CustomerId);
+        var customerFullName = customer is null
+            ? "Naməlum müştəri"
+            : string.Join(
+                " ",
+                new[] { customer.FirstName, customer.LastName }
+                    .Where(value => !string.IsNullOrWhiteSpace(value)));
+
         var text = new StringBuilder();
 
         text.AppendLine($"🆕 Yeni sifariş #{order.OrderNumber}");
+        text.AppendLine($"👤 Müştəri: {customerFullName}");
         text.AppendLine();
         text.AppendLine($"Telefon: {order.PhoneNumber}");
         text.AppendLine($"Ünvan: {order.DeliveryAddress}");
@@ -1860,6 +2456,10 @@ public class TelegramUpdateHandler
         var otherOrders = allOtherOrders.Take(5).ToList();
 
         var text = new StringBuilder();
+        var activeAssignment = await _assignmentService.GetOrderAssignmentAsync(orderNumber);
+        var shipments = await _shipmentService.GetOrderShipmentsAsync(orderNumber);
+        var hasActiveShipment = shipments.Any(shipment =>
+            shipment.Status is not ShipmentStatus.Delivered and not ShipmentStatus.Cancelled);
 
         text.AppendLine($"📦 Sifariş #{order.OrderNumber}");
         text.AppendLine(
@@ -1882,6 +2482,9 @@ public class TelegramUpdateHandler
         text.AppendLine($"Ünvan: {order.DeliveryAddress}");
         text.AppendLine(
             $"Digər sifarişlər: {allOtherOrders.Count}");
+        text.AppendLine(activeAssignment is null
+            ? "İşçi: təyin edilməyib"
+            : $"İşçi: {activeAssignment.StaffName}");
         text.AppendLine();
 
         foreach (var item in order.Items)
@@ -1909,6 +2512,47 @@ public class TelegramUpdateHandler
         }
 
         var rows = new List<InlineKeyboardButton[]>();
+
+        if (order.Status is not OrderStatus.PendingAdminApproval and
+            not OrderStatus.Completed and not OrderStatus.Cancelled)
+        {
+            if (!hasActiveShipment)
+            {
+                rows.Add(
+                [
+                    InlineKeyboardButton.WithCallbackData(
+                        "👷 İşçi təyin et / dəyiş",
+                        $"admin:aw:{orderNumber}")
+                ]);
+                if (activeAssignment is not null)
+                {
+                    rows.Add(
+                    [
+                        InlineKeyboardButton.WithCallbackData(
+                            "🚫 İşçi təyinatını ləğv et",
+                            $"admin:unassign:{orderNumber}")
+                    ]);
+                }
+            }
+            if (activeAssignment is not null)
+            {
+                rows.Add(
+                [
+                    InlineKeyboardButton.WithCallbackData(
+                        "📦 Göndəriş yarat",
+                        $"admin:ship:new:{orderNumber}")
+                ]);
+            }
+            if (shipments.Count > 0)
+            {
+                rows.Add(
+                [
+                    InlineKeyboardButton.WithCallbackData(
+                        "🚚 Göndərişlər",
+                        $"admin:ships:{orderNumber}")
+                ]);
+            }
+        }
 
         if (order.ContainsSpecialOrder &&
             order.Items.All(item => item.DeliveredQuantity == 0) &&
@@ -1952,35 +2596,39 @@ public class TelegramUpdateHandler
                 rows.Add([button]);
         }
 
-        switch (order.Status)
+        if (!hasActiveShipment)
         {
-            case OrderStatus.Confirmed:
-                rows.Add(
-                [
-                    InlineKeyboardButton.WithCallbackData(
-                    "📦 Hazırlanır",
-                    $"admin:preparing:{orderNumber}"),
-
-                InlineKeyboardButton.WithCallbackData(
-                    "❌ Ləğv et",
-                    $"admin:cancel:{orderNumber}")
-                ]);
-                break;
-
-            case OrderStatus.Preparing:
-                if (order.FulfillmentStatus != FulfillmentStatus.PartiallyDelivered)
-                {
+            switch (order.Status)
+            {
+                case OrderStatus.Confirmed:
                     rows.Add(
                     [
                         InlineKeyboardButton.WithCallbackData(
+                        "📦 Hazırlanır",
+                        $"admin:preparing:{orderNumber}"),
+
+                    InlineKeyboardButton.WithCallbackData(
                             "❌ Ləğv et",
                             $"admin:cancel:{orderNumber}")
                     ]);
-                }
-                break;
+                    break;
+
+                case OrderStatus.Preparing:
+                    if (order.FulfillmentStatus != FulfillmentStatus.PartiallyDelivered)
+                    {
+                        rows.Add(
+                        [
+                            InlineKeyboardButton.WithCallbackData(
+                                "❌ Ləğv et",
+                                $"admin:cancel:{orderNumber}")
+                        ]);
+                    }
+                    break;
+            }
         }
 
-        if (order.ReadyQuantity > 0 &&
+        if (!hasActiveShipment &&
+            order.ReadyQuantity > 0 &&
             (order.ReadyQuantity == order.RemainingQuantity ||
              order.DeliveryMode == DeliveryMode.PartialAllowed) &&
             order.Status is not OrderStatus.PendingAdminApproval &&
@@ -1999,7 +2647,8 @@ public class TelegramUpdateHandler
             ]);
         }
 
-        if (order.RemainingQuantity > 0 &&
+        if (!hasActiveShipment &&
+            order.RemainingQuantity > 0 &&
             order.FulfillmentStatus == FulfillmentStatus.PartiallyDelivered)
         {
             rows.Add(
@@ -2281,6 +2930,12 @@ public class TelegramUpdateHandler
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
+                    "👷 İşçilər",
+                    "admin:staff")
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData(
                     "👤 Müştəri menyusu",
                     "admin:customer-menu")
             }
@@ -2290,6 +2945,22 @@ public class TelegramUpdateHandler
             chatId,
             "👨‍💼 StockMate Admin Panel",
             replyMarkup: keyboard);
+
+        if (!string.IsNullOrWhiteSpace(_telegramOptions.MiniAppUrl))
+        {
+            await _botClient.SendMessage(
+                chatId,
+                "Mini App-da bütün idarəetmə bölmələrini aça bilərsiniz.",
+                replyMarkup: BuildMiniAppKeyboard("📱 İdarəetmə panelini aç"));
+        }
+    }
+
+    private InlineKeyboardMarkup BuildMiniAppKeyboard(string text)
+    {
+        return new InlineKeyboardMarkup(
+            InlineKeyboardButton.WithWebApp(
+                text,
+                new WebAppInfo { Url = _telegramOptions.MiniAppUrl!.Trim() }));
     }
     private async Task SendAdminOrderListAsync(
     long chatId,
@@ -2549,6 +3220,190 @@ public class TelegramUpdateHandler
             chatId,
             text.ToString());
     }
+    private async Task<StaffDto> GetRequiredAdminStaffAsync(long telegramUserId)
+    {
+        var admin = await _staffService.GetByTelegramUserIdAsync(telegramUserId)
+            ?? throw new UnauthorizedAccessException("Admin qeydiyyatı tapılmadı.");
+
+        if (admin.Role != StaffRole.Admin || !admin.IsActive)
+            throw new UnauthorizedAccessException("Bu əməliyyat yalnız aktiv admin üçündür.");
+
+        return admin;
+    }
+
+    private async Task SendAdminStaffListAsync(long chatId)
+    {
+        var workers = (await _staffService.GetAllAsync())
+            .Where(staff => staff.Role == StaffRole.Worker)
+            .OrderByDescending(staff => staff.IsActive)
+            .ThenBy(staff => staff.FirstName)
+            .ToList();
+
+        var rows = workers
+            .Select(worker => new[]
+            {
+                InlineKeyboardButton.WithCallbackData(
+                    $"{(worker.IsActive ? "✅" : "⛔")} {GetStaffName(worker)}",
+                    $"admin:staff:view:{worker.Id}")
+            })
+            .ToList();
+
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData("➕ İşçi əlavə et", "admin:staff:add")
+        ]);
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData("⬅️ Admin menyusu", "admin:menu")
+        ]);
+
+        await _botClient.SendMessage(
+            chatId,
+            workers.Count == 0 ? "👷 Hələ işçi əlavə edilməyib." : "👷 İşçilər",
+            replyMarkup: new InlineKeyboardMarkup(rows));
+    }
+
+    private async Task SendAdminStaffDetailAsync(long chatId, Guid staffId)
+    {
+        var worker = (await _staffService.GetAllAsync())
+            .FirstOrDefault(staff => staff.Id == staffId)
+            ?? throw new KeyNotFoundException("İşçi tapılmadı.");
+        var assignments = await _assignmentService.GetWorkerAssignmentsAsync(worker.Id);
+        var shipments = await _shipmentService.GetWorkerShipmentsAsync(worker.Id);
+
+        var text = new StringBuilder()
+            .AppendLine($"👷 {GetStaffName(worker)}")
+            .AppendLine($"Status: {(worker.IsActive ? "Aktiv" : "Passiv")}")
+            .AppendLine($"Telegram ID: {worker.TelegramUserId}")
+            .AppendLine(string.IsNullOrWhiteSpace(worker.Username)
+                ? "Username: yoxdur"
+                : $"Username: @{worker.Username}")
+            .AppendLine($"Aktiv sifarişlər: {assignments.Count}")
+            .AppendLine($"Göndərişlər: {shipments.Count}");
+
+        foreach (var assignment in assignments.Take(10))
+            text.AppendLine($"• #{assignment.OrderNumber}");
+
+        var toggle = worker.IsActive
+            ? InlineKeyboardButton.WithCallbackData("⛔ Passiv et", $"admin:staff:off:{worker.Id}")
+            : InlineKeyboardButton.WithCallbackData("✅ Aktiv et", $"admin:staff:on:{worker.Id}");
+
+        await _botClient.SendMessage(
+            chatId,
+            text.ToString(),
+            replyMarkup: new InlineKeyboardMarkup(new[]
+            {
+                new[] { toggle },
+                new[] { InlineKeyboardButton.WithCallbackData("⬅️ İşçilər", "admin:staff") }
+            }));
+    }
+
+    private async Task SendWorkerSelectionAsync(long chatId, long orderNumber)
+    {
+        var workers = (await _staffService.GetAllAsync())
+            .Where(staff => staff.Role == StaffRole.Worker && staff.IsActive)
+            .OrderBy(staff => staff.FirstName)
+            .ToList();
+
+        if (workers.Count == 0)
+        {
+            await _botClient.SendMessage(
+                chatId,
+                "Aktiv işçi yoxdur. Əvvəlcə İşçilər menyusundan işçi əlavə edin.");
+            return;
+        }
+
+        var rows = workers.Select(worker => new[]
+        {
+            InlineKeyboardButton.WithCallbackData(
+                GetStaffName(worker),
+                $"admin:a:{orderNumber}:{worker.Id}")
+        }).ToList();
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData("⬅️ Sifariş", $"admin:actions:{orderNumber}")
+        ]);
+
+        await _botClient.SendMessage(
+            chatId,
+            $"#{orderNumber} sifarişi üçün işçi seçin:",
+            replyMarkup: new InlineKeyboardMarkup(rows));
+    }
+
+    private async Task SendAdminShipmentsAsync(long chatId, long orderNumber)
+    {
+        var shipments = await _shipmentService.GetOrderShipmentsAsync(orderNumber);
+        if (shipments.Count == 0)
+        {
+            await _botClient.SendMessage(
+                chatId,
+                "Bu sifariş üçün göndəriş yoxdur.",
+                replyMarkup: new InlineKeyboardMarkup(
+                    InlineKeyboardButton.WithCallbackData("⬅️ Sifariş", $"admin:actions:{orderNumber}")));
+            return;
+        }
+
+        foreach (var shipment in shipments)
+            await SendAdminShipmentAsync(chatId, shipment);
+    }
+
+    private async Task SendAdminShipmentAsync(long chatId, ShipmentDto shipment)
+    {
+        var text = new StringBuilder()
+            .AppendLine($"🚚 Sifariş #{shipment.OrderNumber}")
+            .AppendLine($"İşçi: {shipment.StaffName}")
+            .AppendLine($"Status: {GetShipmentStatusText(shipment.Status)}")
+            .AppendLine($"Ünvan: {shipment.DeliveryAddress}")
+            .AppendLine();
+        foreach (var item in shipment.Items)
+            text.AppendLine($"• {item.ProductName}: {item.Quantity} ədəd");
+
+        var rows = new List<InlineKeyboardButton[]>();
+        var nextButton = shipment.Status switch
+        {
+            ShipmentStatus.Assigned => InlineKeyboardButton.WithCallbackData(
+                "📦 Hazırlanır", $"admin:ss:p:{shipment.Id}"),
+            ShipmentStatus.Preparing => InlineKeyboardButton.WithCallbackData(
+                "✅ Hazırdır", $"admin:ss:r:{shipment.Id}"),
+            ShipmentStatus.Ready => InlineKeyboardButton.WithCallbackData(
+                "🚗 Çatdırılmaya çıxdı", $"admin:ss:o:{shipment.Id}"),
+            ShipmentStatus.OutForDelivery => InlineKeyboardButton.WithCallbackData(
+                "✅ Çatdırıldı", $"admin:ss:d:{shipment.Id}"),
+            _ => null
+        };
+        if (nextButton is not null)
+            rows.Add([nextButton]);
+        if (shipment.Status is not ShipmentStatus.Delivered and not ShipmentStatus.Cancelled)
+            rows.Add(
+            [
+                InlineKeyboardButton.WithCallbackData("❌ Göndərişi ləğv et", $"admin:ss:c:{shipment.Id}")
+            ]);
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData("⬅️ Sifariş", $"admin:actions:{shipment.OrderNumber}")
+        ]);
+
+        await _botClient.SendMessage(
+            chatId,
+            text.ToString(),
+            replyMarkup: new InlineKeyboardMarkup(rows));
+    }
+
+    private static string GetStaffName(StaffDto staff)
+        => string.Join(" ", new[] { staff.FirstName, staff.LastName }
+            .Where(value => !string.IsNullOrWhiteSpace(value)));
+
+    private static string GetShipmentStatusText(ShipmentStatus status) => status switch
+    {
+        ShipmentStatus.Assigned => "İşçiyə təyin edilib",
+        ShipmentStatus.Preparing => "Hazırlanır",
+        ShipmentStatus.Ready => "Hazırdır",
+        ShipmentStatus.OutForDelivery => "Çatdırılmaya çıxıb",
+        ShipmentStatus.Delivered => "Çatdırılıb",
+        ShipmentStatus.Cancelled => "Ləğv edilib",
+        _ => status.ToString()
+    };
+
     private async Task<bool> TryHandleAdminInputAsync(
     Message message)
     {
@@ -2565,6 +3420,70 @@ public class TelegramUpdateHandler
         {
             return false;
         }
+
+        if (session.AdminInputStep == AdminInputStep.AwaitingWorkerTelegramId)
+        {
+            if (!long.TryParse(message.Text, out var workerTelegramId) || workerTelegramId <= 0)
+            {
+                await _botClient.SendMessage(message.Chat.Id, "Düzgün Telegram ID yazın.");
+                return true;
+            }
+
+            session.WorkerTelegramUserId = workerTelegramId;
+            session.AdminInputStep = AdminInputStep.AwaitingWorkerFirstName;
+            await _botClient.SendMessage(message.Chat.Id, "İşçinin adını yazın:");
+            return true;
+        }
+
+        if (session.AdminInputStep == AdminInputStep.AwaitingWorkerFirstName)
+        {
+            if (string.IsNullOrWhiteSpace(message.Text))
+            {
+                await _botClient.SendMessage(message.Chat.Id, "Ad boş ola bilməz.");
+                return true;
+            }
+
+            session.WorkerFirstName = message.Text.Trim();
+            session.AdminInputStep = AdminInputStep.AwaitingWorkerLastName;
+            await _botClient.SendMessage(
+                message.Chat.Id,
+                "İşçinin soyadını yazın və ya ‘Keç’ yazın:");
+            return true;
+        }
+
+        if (session.AdminInputStep == AdminInputStep.AwaitingWorkerLastName)
+        {
+            session.WorkerLastName = message.Text?.Equals(
+                "Keç", StringComparison.OrdinalIgnoreCase) == true
+                ? null
+                : message.Text?.Trim();
+            session.AdminInputStep = AdminInputStep.AwaitingWorkerUsername;
+            await _botClient.SendMessage(
+                message.Chat.Id,
+                "İşçinin Telegram username-ni yazın (@ olmadan) və ya ‘Keç’ yazın:");
+            return true;
+        }
+
+        if (session.AdminInputStep == AdminInputStep.AwaitingWorkerUsername)
+        {
+            var username = message.Text?.Equals(
+                "Keç", StringComparison.OrdinalIgnoreCase) == true
+                ? null
+                : message.Text?.Trim().TrimStart('@');
+
+            var worker = await _staffService.CreateWorkerAsync(
+                new CreateWorkerRequest(
+                    session.WorkerTelegramUserId!.Value,
+                    session.WorkerFirstName!,
+                    session.WorkerLastName,
+                    username));
+
+            _sessionStore.Clear(telegramUserId);
+            await _botClient.SendMessage(message.Chat.Id, "✅ İşçi əlavə edildi.");
+            await SendAdminStaffDetailAsync(message.Chat.Id, worker.Id);
+            return true;
+        }
+
         if (session.AdminInputStep ==
     AdminInputStep.AwaitingProductName)
         {

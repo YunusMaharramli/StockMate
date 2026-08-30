@@ -19,10 +19,13 @@ public class OrdersController : ControllerBase
     [HttpPost("checkout/{telegramUserId:long}")]
     public async Task<ActionResult<OrderDto>> Checkout(
         long telegramUserId,
+        [FromBody] CheckoutOrderRequest request,
         CancellationToken cancellationToken)
     {
         var order = await _orderService.CheckoutAsync(
             telegramUserId,
+            request.CustomerAddressId,
+            request.DeliveryCompanyId,
             cancellationToken);
 
         return CreatedAtAction(
@@ -196,6 +199,10 @@ public class OrdersController : ControllerBase
 }
 
 public sealed record CancelOrderRequest(string Reason);
+
+public sealed record CheckoutOrderRequest(
+    Guid CustomerAddressId,
+    Guid DeliveryCompanyId);
 
 public sealed record SetAdminNoteRequest(string? AdminNote);
 

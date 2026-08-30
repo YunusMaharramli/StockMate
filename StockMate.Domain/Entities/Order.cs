@@ -42,6 +42,9 @@ public class Order
     public long OrderNumber { get; private set; }
 
     public Guid CustomerId { get; private set; }
+    public Guid? CustomerAddressId { get; private set; }
+    public Guid? DeliveryCompanyId { get; private set; }
+    public string? DeliveryCompanyName { get; private set; }
 
     public string PhoneNumber { get; private set; } = string.Empty;
 
@@ -225,6 +228,39 @@ public class Order
         return delivered;
     }
 
+    public void DeliverShipmentItems(
+        IReadOnlyDictionary<Guid, int> quantities)
+    {
+        if (Status is OrderStatus.PendingAdminApproval or
+            OrderStatus.Completed or OrderStatus.Cancelled)
+        {
+            throw new InvalidOperationException(
+                "Order must be active before delivery.");
+        }
+
+        if (quantities.Count == 0)
+            throw new InvalidOperationException("Shipment is empty.");
+
+        foreach (var entry in quantities)
+        {
+            var item = _items.FirstOrDefault(item => item.Id == entry.Key)
+                ?? throw new KeyNotFoundException(
+                    $"Order item '{entry.Key}' was not found.");
+
+            item.DeliverQuantity(entry.Value);
+        }
+
+        if (_items.All(item => item.RemainingQuantity == 0))
+        {
+            Status = OrderStatus.Completed;
+            CompletedAtUtc = DateTime.UtcNow;
+        }
+        else
+        {
+            Status = OrderStatus.Preparing;
+        }
+    }
+
     public int CancelRemainingItems()
     {
         if (Status is OrderStatus.PendingAdminApproval or
@@ -273,5 +309,41 @@ public class Order
             throw new InvalidOperationException(
                 $"Order must be in {requiredStatus} status.");
         }
+    }
+    public void SelectDeliveryDetails(
+    CustomerAddress address,
+    DeliveryCompany company)
+    {
+        if (Status != OrderStatus.PendingAdminApproval)
+        {
+            throw new InvalidOperationException(
+                "Delivery details can only be selected before admin approval.");
+        }
+
+        if (address.CustomerId != CustomerId)
+        {
+            throw new InvalidOperationException(
+                "The selected address does not belong to this customer.");
+        }
+
+        if (!address.IsActive)
+        {
+            throw new InvalidOperationException(
+                "An inactive address cannot be selected.");
+        }
+
+        if (!company.IsActive)
+        {
+            throw new InvalidOperationException(
+                "An inactive delivery company cannot be selected.");
+        }
+
+        CustomerAddressId = address.Id;
+        DeliveryAddress = address.AddressLine;
+        Latitude = address.Latitude;
+        Longitude = address.Longitude;
+
+        DeliveryCompanyId = company.Id;
+        DeliveryCompanyName = company.Name;
     }
 }

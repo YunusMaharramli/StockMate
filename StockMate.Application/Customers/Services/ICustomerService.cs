@@ -24,4 +24,7 @@ public interface ICustomerService
     Task<CustomerDto?> GetByIdAsync(
     Guid id,
     CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<CustomerDto>> GetAllAsync(
+        CancellationToken cancellationToken = default);
 }

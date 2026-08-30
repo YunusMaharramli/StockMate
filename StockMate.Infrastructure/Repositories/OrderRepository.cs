@@ -89,4 +89,30 @@ public class OrderRepository : IOrderRepository
             .Take(20)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<Order>>
+    GetOrdersWithShortagesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var activeStatuses = new[]
+        {
+        OrderStatus.PendingAdminApproval,
+        OrderStatus.Confirmed,
+        OrderStatus.Preparing,
+        OrderStatus.Delivering
+    };
+
+        return await _dbContext.Orders
+            .AsNoTracking()
+            .Include(order => order.Items)
+            .Where(order =>
+                activeStatuses.Contains(order.Status) &&
+                order.Items.Any(item =>
+                    item.SpecialOrderQuantity > 0 &&
+                    (item.SpecialOrderStatus == SpecialOrderStatus.Pending ||
+                     item.SpecialOrderStatus ==
+                     SpecialOrderStatus.OrderedFromSupplier)))
+            .OrderBy(order => order.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
 }

@@ -108,7 +108,6 @@ public class ProductRepository : IProductRepository
     CancellationToken cancellationToken = default)
     {
         return await _dbContext.Products
-            .AsNoTracking()
             .Where(product => ids.Contains(product.Id))
             .ToListAsync(cancellationToken);
     }

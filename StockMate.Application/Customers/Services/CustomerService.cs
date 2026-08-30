@@ -130,4 +130,11 @@ public class CustomerService : ICustomerService
             ? null
             : MapCustomer(customer);
     }
+
+    public async Task<IReadOnlyList<CustomerDto>> GetAllAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var customers = await _customerRepository.GetAllAsync(cancellationToken);
+        return customers.Select(MapCustomer).ToList();
+    }
 }

@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace StockMate.Bot.ErrorHandling;
 
 public class GlobalExceptionHandler : IExceptionHandler
@@ -20,6 +22,9 @@ public class GlobalExceptionHandler : IExceptionHandler
     {
         var statusCode = exception switch
         {
+            UnauthorizedAccessException =>
+                StatusCodes.Status403Forbidden,
+
             KeyNotFoundException =>
                 StatusCodes.Status404NotFound,
 
@@ -27,6 +32,12 @@ public class GlobalExceptionHandler : IExceptionHandler
                 StatusCodes.Status400BadRequest,
 
             InvalidOperationException =>
+                StatusCodes.Status409Conflict,
+
+            DbUpdateConcurrencyException =>
+                StatusCodes.Status409Conflict,
+
+            DbUpdateException =>
                 StatusCodes.Status409Conflict,
 
             _ =>
@@ -51,7 +62,7 @@ public class GlobalExceptionHandler : IExceptionHandler
         {
             Status = statusCode,
             Title = GetTitle(statusCode),
-            Detail = exception.Message,
+            Detail = GetDetail(exception, statusCode),
             Instance = httpContext.Request.Path
         };
 
@@ -62,6 +73,26 @@ public class GlobalExceptionHandler : IExceptionHandler
             cancellationToken);
 
         return true;
+    }
+
+    private static string GetDetail(
+        Exception exception,
+        int statusCode)
+    {
+        return exception switch
+        {
+            DbUpdateConcurrencyException =>
+                "The data was changed by another operation. Refresh and try again.",
+
+            DbUpdateException =>
+                "The database operation conflicts with the current data.",
+
+            _ when statusCode ==
+                StatusCodes.Status500InternalServerError =>
+                "An unexpected server error occurred.",
+
+            _ => exception.Message
+        };
     }
 
     private static string GetTitle(int statusCode)
@@ -76,6 +107,9 @@ public class GlobalExceptionHandler : IExceptionHandler
 
             StatusCodes.Status409Conflict =>
                 "Business rule conflict",
+
+            StatusCodes.Status403Forbidden =>
+                "Access denied",
 
             _ =>
                 "Internal server error"

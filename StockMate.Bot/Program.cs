@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Options;
 using StockMate.Application;
+using StockMate.Application.Notifications;
 using StockMate.Bot.ErrorHandling;
 using StockMate.Bot.Options;
+using StockMate.Bot.Security;
 using StockMate.Bot.Telegram.Handlers;
 using StockMate.Bot.Telegram.Services;
 using StockMate.Bot.Telegram.State;
@@ -11,6 +13,10 @@ using Telegram.Bot;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Console logging works in local development, containers and restricted hosts.
+// The default Windows Event Log provider can fail when the process is not elevated.
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 
 builder.Services
     .AddControllers()
@@ -18,13 +24,27 @@ builder.Services
     {
         options.JsonSerializerOptions.Converters.Add(
             new JsonStringEnumConverter());
-    }); builder.Services.AddEndpointsApiExplorer();
+    });
+
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddOpenApi();
+
+var miniAppOrigins = builder.Configuration
+    .GetSection("MiniApp:AllowedOrigins")
+    .Get<string[]>() ?? ["http://127.0.0.1:4173", "http://localhost:4173"];
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("MiniApp", policy => policy
+        .WithOrigins(miniAppOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod());
+});
 
 var connectionString =
     builder.Configuration.GetConnectionString("PostgreSql")
@@ -46,10 +66,19 @@ builder.Services.AddSingleton<TelegramBotClient>(
             .GetRequiredService<IOptions<TelegramOptions>>()
             .Value;
 
-        if (string.IsNullOrWhiteSpace(options.BotToken))
+        if (string.IsNullOrWhiteSpace(options.BotToken) ||
+            options.BotToken.Contains("your_bot_token", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                "Telegram bot token was not configured.");
+                "Telegram bot token was not configured. Set Telegram:BotToken " +
+                "in appsettings.Development.json or Telegram__BotToken in the environment.");
+        }
+
+        if (options.AdminUserId <= 0)
+        {
+            throw new InvalidOperationException(
+                "Telegram admin user ID was not configured. Set Telegram:AdminUserId " +
+                "in appsettings.Development.json or Telegram__AdminUserId in the environment.");
         }
 
         return new TelegramBotClient(options.BotToken);
@@ -58,6 +87,8 @@ builder.Services.AddSingleton<TelegramBotClient>(
 builder.Services.AddScoped<TelegramUpdateHandler>();
 builder.Services.AddHostedService<TelegramPollingService>();
 builder.Services.AddSingleton<TelegramSessionStore>();
+builder.Services.AddScoped<IWorkflowNotificationService, WorkflowNotificationService>();
+builder.Services.AddScoped<IMiniAppIdentityService, TelegramMiniAppIdentityService>();
 
 var app = builder.Build();
 
@@ -70,9 +101,30 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
+app.UseCors("MiniApp");
 
 app.UseAuthorization();
+
+var legacyApiEnabled = builder.Configuration.GetValue<bool>("LegacyApi:Enabled");
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path;
+    var isAllowedApi = path.StartsWithSegments("/api/miniapp") ||
+                       path.StartsWithSegments("/api/product-images");
+
+    if (!legacyApiEnabled && path.StartsWithSegments("/api") && !isAllowedApi)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    await next();
+});
 
 app.MapControllers();
 

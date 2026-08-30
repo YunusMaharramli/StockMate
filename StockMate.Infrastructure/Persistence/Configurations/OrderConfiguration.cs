@@ -21,6 +21,10 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
 
         builder.Property(order => order.CustomerId)
             .IsRequired();
+        builder.Property(order => order.DeliveryCompanyId);
+
+        builder.Property(order => order.DeliveryCompanyName)
+            .HasMaxLength(200);
 
         builder.Property(order => order.PhoneNumber)
             .HasMaxLength(30)
@@ -69,6 +73,16 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .WithOne()
             .HasForeignKey(item => item.OrderId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<CustomerAddress>()
+            .WithMany()
+            .HasForeignKey(order => order.CustomerAddressId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<DeliveryCompany>()
+            .WithMany()
+            .HasForeignKey(order => order.DeliveryCompanyId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Navigation(order => order.Items)
             .UsePropertyAccessMode(PropertyAccessMode.Field);

@@ -32,6 +32,16 @@ public class CustomerRepository : ICustomerRepository
             cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Customer>> GetAllAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Customers
+            .AsNoTracking()
+            .OrderBy(customer => customer.FirstName)
+            .ThenBy(customer => customer.LastName)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddAsync(
         Customer customer,
         CancellationToken cancellationToken = default)
@@ -45,5 +55,21 @@ public class CustomerRepository : ICustomerRepository
         CancellationToken cancellationToken = default)
     {
         return _dbContext.SaveChangesAsync(cancellationToken);
+    }
+    public async Task<IReadOnlyList<Customer>> GetByIdsAsync(
+    IReadOnlyCollection<Guid> customerIds,
+    CancellationToken cancellationToken = default)
+    {
+        if (customerIds.Count == 0)
+            return [];
+
+        var ids = customerIds
+            .Distinct()
+            .ToArray();
+
+        return await _dbContext.Customers
+            .AsNoTracking()
+            .Where(customer => ids.Contains(customer.Id))
+            .ToListAsync(cancellationToken);
     }
 }

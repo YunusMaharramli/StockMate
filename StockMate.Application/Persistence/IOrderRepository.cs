@@ -30,4 +30,6 @@ public interface IOrderRepository
     Task<IReadOnlyList<Order>> GetByCustomerIdAsync(
     Guid customerId,
     CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Order>> GetOrdersWithShortagesAsync(
+    CancellationToken cancellationToken = default);
 }

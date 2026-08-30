@@ -7,6 +7,8 @@ public interface IOrderService
 {
     Task<OrderDto> CheckoutAsync(
         long telegramUserId,
+        Guid customerAddressId,
+        Guid deliveryCompanyId,
         CancellationToken cancellationToken = default);
 
     Task<OrderDto?> GetByOrderNumberAsync(
@@ -77,4 +79,8 @@ public interface IOrderService
     Task<IReadOnlyList<OrderDto>> GetCustomerOrdersAsync(
     long telegramUserId,
     CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<OrderDto>> GetCustomerOrdersByCustomerIdAsync(
+        Guid customerId,
+        CancellationToken cancellationToken = default);
 }

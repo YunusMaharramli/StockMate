@@ -7,4 +7,6 @@ public class TelegramOptions
     public string BotToken { get; init; } = string.Empty;
 
     public long AdminUserId { get; init; }
+
+    public string? MiniAppUrl { get; init; }
 }

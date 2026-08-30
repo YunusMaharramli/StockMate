@@ -22,9 +22,25 @@ public class StockMateDbContext : DbContext
     public DbSet<Order> Orders => Set<Order>();
 
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
-
+    public DbSet<Staff> Staff => Set<Staff>();
+    public DbSet<OrderAssignment> OrderAssignments => Set<OrderAssignment>();
+    public DbSet<OrderShipment> OrderShipments => Set<OrderShipment>();
+    public DbSet<OrderShipmentItem> OrderShipmentItems => Set<OrderShipmentItem>();
+    public DbSet<ShipmentStatusHistory> ShipmentStatusHistory => Set<ShipmentStatusHistory>();
+    public DbSet<CustomerAddress> CustomerAddresses =>
+    Set<CustomerAddress>();
+    public DbSet<DeliveryCompany> DeliveryCompanies =>
+        Set<DeliveryCompany>();
     public DbSet<StockMovement> StockMovements =>
         Set<StockMovement>();
+    public DbSet<StockPurchase> StockPurchases =>
+    Set<StockPurchase>();
+    public DbSet<StockPurchaseItem> StockPurchaseItems =>
+        Set<StockPurchaseItem>();
+    public DbSet<SaleRecord> SaleRecords =>
+    Set<SaleRecord>();
+    public DbSet<SaleRecordItem> SaleRecordItems =>
+        Set<SaleRecordItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

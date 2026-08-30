@@ -5,6 +5,27 @@
     <File Path=".gitignore" />
     <File Path="docker-compose.yml" />
   </Folder>
+  <Folder Name="/StockMate.MiniApp/">
+    <File Path="StockMate.MiniApp/.gitignore" />
+    <File Path="StockMate.MiniApp/eslint.config.mjs" />
+    <File Path="StockMate.MiniApp/index.html" />
+    <File Path="StockMate.MiniApp/package-lock.json" />
+    <File Path="StockMate.MiniApp/package.json" />
+    <File Path="StockMate.MiniApp/README.md" />
+    <File Path="StockMate.MiniApp/StockMate.MiniApp.esproj" />
+    <File Path="StockMate.MiniApp/tsconfig.json" />
+    <File Path="StockMate.MiniApp/vite.config.ts" />
+  </Folder>
+  <Folder Name="/StockMate.MiniApp/public/">
+    <File Path="StockMate.MiniApp/public/favicon.svg" />
+  </Folder>
+  <Folder Name="/StockMate.MiniApp/src/">
+    <File Path="StockMate.MiniApp/src/api.ts" />
+    <File Path="StockMate.MiniApp/src/App.tsx" />
+    <File Path="StockMate.MiniApp/src/index.css" />
+    <File Path="StockMate.MiniApp/src/main.tsx" />
+    <File Path="StockMate.MiniApp/src/types.ts" />
+  </Folder>
   <Project Path="StockMate.Application/StockMate.Application.csproj" />
   <Project Path="StockMate.Bot/StockMate.Bot.csproj" />
   <Project Path="StockMate.Domain.Tests/StockMate.Domain.Tests.csproj" />

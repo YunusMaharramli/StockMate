@@ -139,6 +139,24 @@ public class OrderItem
         return quantity;
     }
 
+    internal void DeliverQuantity(int quantity)
+    {
+        if (quantity <= 0)
+            throw new ArgumentOutOfRangeException(nameof(quantity));
+
+        if (quantity > ReadyQuantity || quantity > RemainingQuantity)
+            throw new InvalidOperationException(
+                "Shipment quantity exceeds the ready quantity.");
+
+        DeliveredQuantity += quantity;
+
+        if (RemainingQuantity == 0 &&
+            SpecialOrderStatus == SpecialOrderStatus.Arrived)
+        {
+            SpecialOrderStatus = SpecialOrderStatus.Completed;
+        }
+    }
+
     internal int CancelRemainingQuantity()
     {
         var quantity = RemainingQuantity;

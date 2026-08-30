@@ -12,10 +12,16 @@ public interface ICustomerRepository
         long telegramUserId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Customer>> GetAllAsync(
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(
         Customer customer,
         CancellationToken cancellationToken = default);
 
     Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Customer>> GetByIdsAsync(
+    IReadOnlyCollection<Guid> customerIds,
+    CancellationToken cancellationToken = default);
 }

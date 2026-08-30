@@ -1,5 +1,6 @@
 ﻿using StockMate.Application.Orders.Models;
 using StockMate.Application.Persistence;
+using StockMate.Application.Sales.Services;
 using StockMate.Domain.Entities;
 using StockMate.Domain.Enums;
 
@@ -11,23 +12,51 @@ public class OrderService : IOrderService
     private readonly ICartRepository _cartRepository;
     private readonly ICustomerRepository _customerRepository;
     private readonly IProductRepository _productRepository;
+    private readonly IShipmentRepository _shipmentRepository;
+    private readonly ICustomerAddressRepository _customerAddressRepository;
+    private readonly IDeliveryCompanyRepository _deliveryCompanyRepository;
+    private readonly ISaleRecordingService _saleRecordingService;
 
     public OrderService(
         IOrderRepository orderRepository,
         ICartRepository cartRepository,
         ICustomerRepository customerRepository,
-        IProductRepository productRepository)
+        IProductRepository productRepository,
+        IShipmentRepository shipmentRepository,
+        ICustomerAddressRepository customerAddressRepository,
+        IDeliveryCompanyRepository deliveryCompanyRepository,
+        ISaleRecordingService saleRecordingService)
     {
         _orderRepository = orderRepository;
         _cartRepository = cartRepository;
         _customerRepository = customerRepository;
         _productRepository = productRepository;
+        _shipmentRepository = shipmentRepository;
+        _customerAddressRepository = customerAddressRepository;
+        _deliveryCompanyRepository = deliveryCompanyRepository;
+        _saleRecordingService = saleRecordingService;
     }
 
     public async Task<OrderDto> CheckoutAsync(
         long telegramUserId,
+        Guid customerAddressId,
+        Guid deliveryCompanyId,
         CancellationToken cancellationToken = default)
     {
+        if (customerAddressId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Customer address ID is required.",
+                nameof(customerAddressId));
+        }
+
+        if (deliveryCompanyId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Delivery company ID is required.",
+                nameof(deliveryCompanyId));
+        }
+
         var customer =
             await _customerRepository.GetByTelegramUserIdAsync(
                 telegramUserId,
@@ -35,13 +64,63 @@ public class OrderService : IOrderService
             ?? throw new KeyNotFoundException(
                 $"Customer with Telegram ID '{telegramUserId}' was not found.");
 
-        if (string.IsNullOrWhiteSpace(customer.PhoneNumber) ||
-            string.IsNullOrWhiteSpace(customer.DeliveryAddress))
+        if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
         {
             throw new InvalidOperationException(
-                "Phone number and delivery address are required.");
+                "Phone number is required.");
         }
 
+        var address =
+            await _customerAddressRepository.GetByIdAsync(
+                customerAddressId,
+                cancellationToken)
+            ?? throw new KeyNotFoundException(
+                "Customer address was not found.");
+
+        if (address.CustomerId != customer.Id)
+        {
+            throw new UnauthorizedAccessException(
+                "The selected address does not belong to this customer.");
+        }
+
+        if (!address.IsActive)
+        {
+            throw new InvalidOperationException(
+                "The selected address is inactive.");
+        }
+
+        var deliveryCompany =
+            await _deliveryCompanyRepository.GetByIdAsync(
+                deliveryCompanyId,
+                cancellationToken)
+            ?? throw new KeyNotFoundException(
+                "Delivery company was not found.");
+
+        if (!deliveryCompany.IsActive)
+        {
+            throw new InvalidOperationException(
+                "The selected delivery company is inactive.");
+        }
+
+        return await CreateOrderAsync(
+            customer,
+            address.AddressLine,
+            address.Latitude,
+            address.Longitude,
+            address,
+            deliveryCompany,
+            cancellationToken);
+    }
+
+    private async Task<OrderDto> CreateOrderAsync(
+        Customer customer,
+        string deliveryAddress,
+        double? latitude,
+        double? longitude,
+        CustomerAddress selectedAddress,
+        DeliveryCompany deliveryCompany,
+        CancellationToken cancellationToken)
+    {
         var cart = await _cartRepository.GetByCustomerIdAsync(
                        customer.Id,
                        cancellationToken)
@@ -65,12 +144,29 @@ public class OrderService : IOrderService
         var productsById = products.ToDictionary(
             product => product.Id);
 
+        var pendingOrders =
+            await _orderRepository.GetByStatusAsync(
+                OrderStatus.PendingAdminApproval,
+                cancellationToken);
+
+        var reservedStockByProduct = pendingOrders
+            .SelectMany(existingOrder => existingOrder.Items)
+            .GroupBy(item => item.ProductId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(item =>
+                    item.FromStockQuantity));
+
         var order = new Order(
             customer.Id,
-            customer.PhoneNumber,
-            customer.DeliveryAddress,
-            customer.Latitude,
-            customer.Longitude);
+            customer.PhoneNumber!,
+            deliveryAddress,
+            latitude,
+            longitude);
+
+        order.SelectDeliveryDetails(
+            selectedAddress,
+            deliveryCompany);
 
         foreach (var cartItem in cart.Items)
         {
@@ -88,19 +184,25 @@ public class OrderService : IOrderService
                     $"Product '{product.Name}' is inactive.");
             }
 
+            var reservedQuantity =
+                reservedStockByProduct.GetValueOrDefault(
+                    product.Id);
+
+            var availableStockQuantity = Math.Max(
+                0,
+                product.StockQuantity - reservedQuantity);
+
             var fromStockQuantity = Math.Min(
                 cartItem.Quantity,
-                product.StockQuantity);
+                availableStockQuantity);
 
             var missingQuantity =
                 cartItem.Quantity - fromStockQuantity;
 
-            var specialOrderQuantity = missingQuantity;
-
             order.AddItem(
                 product,
                 fromStockQuantity,
-                specialOrderQuantity);
+                missingQuantity);
         }
 
         await _orderRepository.AddAsync(
@@ -109,7 +211,8 @@ public class OrderService : IOrderService
 
         cart.Clear();
 
-        await _orderRepository.SaveChangesAsync(cancellationToken);
+        await _orderRepository.SaveChangesAsync(
+            cancellationToken);
 
         return MapOrder(order);
     }
@@ -229,12 +332,27 @@ public class OrderService : IOrderService
             orderNumber,
             cancellationToken);
 
-        if (order.RemainingQuantity > 0)
-            order.DeliverReadyItems();
-        else if (order.Status != OrderStatus.Completed)
-            order.Complete();
+        await EnsureNoActiveShipmentsAsync(order, cancellationToken);
 
-        await _orderRepository.SaveChangesAsync(cancellationToken);
+        if (order.RemainingQuantity > 0)
+        {
+            var deliveredQuantities =
+                order.DeliverReadyItems();
+
+            await _saleRecordingService.AddAsync(
+                order,
+                deliveredQuantities,
+                DateTime.UtcNow,
+                shipmentId: null,
+                cancellationToken);
+        }
+        else if (order.Status != OrderStatus.Completed)
+        {
+            order.Complete();
+        }
+
+        await _orderRepository.SaveChangesAsync(
+            cancellationToken);
     }
 
     public async Task<OrderDto> DeliverReadyItemsAsync(
@@ -243,9 +361,20 @@ public class OrderService : IOrderService
     {
         var order = await GetRequiredOrderAsync(orderNumber, cancellationToken);
 
-        order.DeliverReadyItems();
+        await EnsureNoActiveShipmentsAsync(order, cancellationToken);
 
-        await _orderRepository.SaveChangesAsync(cancellationToken);
+        var deliveredQuantities =
+    order.DeliverReadyItems();
+
+        await _saleRecordingService.AddAsync(
+            order,
+            deliveredQuantities,
+            DateTime.UtcNow,
+            shipmentId: null,
+            cancellationToken);
+
+        await _orderRepository.SaveChangesAsync(
+            cancellationToken);
 
         return MapOrder(order);
     }
@@ -255,6 +384,8 @@ public class OrderService : IOrderService
         CancellationToken cancellationToken = default)
     {
         var order = await GetRequiredOrderAsync(orderNumber, cancellationToken);
+
+        await EnsureNoActiveShipmentsAsync(order, cancellationToken);
 
         await RestoreUndeliveredStockAsync(order, cancellationToken);
         order.CancelRemainingItems();
@@ -272,6 +403,8 @@ public class OrderService : IOrderService
         var order = await GetRequiredOrderAsync(
             orderNumber,
             cancellationToken);
+
+        await EnsureNoActiveShipmentsAsync(order, cancellationToken);
 
         var stockWasDeducted =
             order.Status is OrderStatus.Confirmed
@@ -418,6 +551,21 @@ public class OrderService : IOrderService
         }
     }
 
+    private async Task EnsureNoActiveShipmentsAsync(
+        Order order,
+        CancellationToken cancellationToken)
+    {
+        var shipments = await _shipmentRepository.GetByOrderIdAsync(
+            order.Id, cancellationToken);
+
+        if (shipments.Any(shipment =>
+                shipment.Status is not ShipmentStatus.Delivered and not ShipmentStatus.Cancelled))
+        {
+            throw new InvalidOperationException(
+                "Active shipment must be completed or cancelled first.");
+        }
+    }
+
     private static OrderDto MapOrder(Order order)
     {
         var items = order.Items
@@ -442,10 +590,13 @@ public class OrderService : IOrderService
             order.Id,
             order.OrderNumber,
             order.CustomerId,
+            order.CustomerAddressId,
             order.PhoneNumber,
             order.DeliveryAddress,
             order.Latitude,
             order.Longitude,
+            order.DeliveryCompanyId,
+            order.DeliveryCompanyName,
             order.Status,
             order.DeliveryMode,
             items,
@@ -514,6 +665,22 @@ public class OrderService : IOrderService
             await _orderRepository.GetByCustomerIdAsync(
                 customer.Id,
                 cancellationToken);
+
+        return orders.Select(MapOrder).ToList();
+    }
+
+    public async Task<IReadOnlyList<OrderDto>> GetCustomerOrdersByCustomerIdAsync(
+        Guid customerId,
+        CancellationToken cancellationToken = default)
+    {
+        var customer = await _customerRepository.GetByIdAsync(
+            customerId,
+            cancellationToken)
+            ?? throw new KeyNotFoundException("Customer was not found.");
+
+        var orders = await _orderRepository.GetByCustomerIdAsync(
+            customer.Id,
+            cancellationToken);
 
         return orders.Select(MapOrder).ToList();
     }

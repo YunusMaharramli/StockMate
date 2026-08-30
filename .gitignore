@@ -4,6 +4,7 @@
 [Dd]ebug/
 [Rr]elease/
 artifacts/
+.codex-build/
 
 # Visual Studio
 .vs/
@@ -56,3 +57,18 @@ desktop.ini
 *.nupkg
 *.snupkg
 packages/
+
+# Mini App / Node.js
+node_modules/
+dist/
+.vite/
+.npm-cache/
+.wrangler/
+*.tsbuildinfo
+**/App_Data/
+**/src/dist-preview/
+**/src/.vite-cache/
+
+# Səhvən yaradılmış dublikat və lokal fayllar
+StockMate.Application/Shipments/StockMate.MiniApp/
+StockMate.MiniApp/*.xlsx

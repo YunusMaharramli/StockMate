@@ -21,15 +21,17 @@ public static class DependencyInjection
 
         services.AddDbContext<StockMateDbContext>(options =>
             options.UseNpgsql(connectionString));
-
         services.AddScoped<IProductRepository, ProductRepository>();
-
         services.AddScoped<ICustomerRepository, CustomerRepository>();
-
         services.AddScoped<ICartRepository, CartRepository>();
-
         services.AddScoped<IOrderRepository, OrderRepository>();
-
+        services.AddScoped<IStaffRepository, StaffRepository>();
+        services.AddScoped<IOrderAssignmentRepository, OrderAssignmentRepository>();
+        services.AddScoped<IShipmentRepository, ShipmentRepository>();
+        services.AddScoped<ICustomerAddressRepository,CustomerAddressRepository>();
+        services.AddScoped<IDeliveryCompanyRepository,DeliveryCompanyRepository>();
+        services.AddScoped<IStockPurchaseRepository,StockPurchaseRepository>();
+        services.AddScoped<ISaleRecordRepository,SaleRecordRepository>();
         return services;
     }
 }

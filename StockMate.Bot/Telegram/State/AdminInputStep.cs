@@ -15,5 +15,10 @@ public enum AdminInputStep
     AwaitingProductImage = 15,
     AwaitingProductNameEdit = 20,
     AwaitingProductDescriptionEdit = 21,
-    AwaitingProductImageEdit = 22
+    AwaitingProductImageEdit = 22,
+
+    AwaitingWorkerTelegramId = 30,
+    AwaitingWorkerFirstName = 31,
+    AwaitingWorkerLastName = 32,
+    AwaitingWorkerUsername = 33
 }

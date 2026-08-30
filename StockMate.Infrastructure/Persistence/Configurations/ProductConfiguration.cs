@@ -28,7 +28,8 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             .IsRequired();
 
         builder.Property(product => product.StockQuantity)
-            .IsRequired();
+            .IsRequired()
+            .IsConcurrencyToken();
 
         builder.Property(product => product.Description)
             .HasMaxLength(1000)
