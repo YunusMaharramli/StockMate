@@ -12,6 +12,7 @@ using StockMate.Application.Shipments.Models;
 using StockMate.Application.Shipments.Services;
 using StockMate.Application.Staff.Models;
 using StockMate.Application.Staff.Services;
+using StockMate.Application.TelegramInvites.Services;
 using StockMate.Bot.Options;
 using StockMate.Bot.Telegram.State;
 using StockMate.Domain.Enums;
@@ -37,6 +38,7 @@ public class TelegramUpdateHandler
     private readonly IStaffService _staffService;
     private readonly IOrderAssignmentService _assignmentService;
     private readonly IShipmentService _shipmentService;
+    private readonly ITelegramInviteService _telegramInviteService;
     private readonly TelegramOptions _telegramOptions;
 
     public TelegramUpdateHandler(
@@ -51,6 +53,7 @@ public class TelegramUpdateHandler
     IStaffService staffService,
     IOrderAssignmentService assignmentService,
     IShipmentService shipmentService,
+    ITelegramInviteService telegramInviteService,
     IOptions<TelegramOptions> telegramOptions,
     ILogger<TelegramUpdateHandler> logger)
     {
@@ -66,6 +69,7 @@ public class TelegramUpdateHandler
         _staffService = staffService;
         _assignmentService = assignmentService;
         _shipmentService = shipmentService;
+        _telegramInviteService = telegramInviteService;
         _telegramOptions = telegramOptions.Value;
     }
 
@@ -86,6 +90,12 @@ public class TelegramUpdateHandler
         }
         if (message.Text == "/cancel")
         {
+            if (!await HasCustomerBotAccessAsync(message.From.Id))
+            {
+                await SendInviteRequiredMessageAsync(message.Chat.Id);
+                return;
+            }
+
             _sessionStore.Clear(message.From.Id);
 
             await _botClient.SendMessage(
@@ -109,6 +119,12 @@ public class TelegramUpdateHandler
                 message.Chat.Id,
                 $"Telegram ID: {message.From.Id}");
 
+            return;
+        }
+
+        if (!await HasCustomerBotAccessAsync(message.From.Id))
+        {
+            await SendInviteRequiredMessageAsync(message.Chat.Id);
             return;
         }
 
@@ -138,6 +154,12 @@ public class TelegramUpdateHandler
 
         var chatId = query.Message.Chat.Id;
         var telegramUserId = query.From.Id;
+
+        if (!await HasCustomerBotAccessAsync(telegramUserId))
+        {
+            await SendInviteRequiredMessageAsync(chatId);
+            return;
+        }
 
         if (query.Data.StartsWith("admin:") &&
             query.From.Id != _telegramOptions.AdminUserId)
@@ -803,6 +825,12 @@ public class TelegramUpdateHandler
             return;
         }
 
+        if (query.Data == "admin:invite:create")
+        {
+            await SendNewCustomerInviteAsync(chatId);
+            return;
+        }
+
         if (query.Data == "admin:customer-menu")
         {
             await SendCustomerMainMenuAsync(chatId);
@@ -1427,6 +1455,20 @@ public class TelegramUpdateHandler
                 "Tapşırıqlarınızı Mini App panelindən idarə edin.",
                 replyMarkup: BuildMiniAppKeyboard("👷 İşçi panelini aç"));
             return;
+        }
+
+        var customer = await _customerService.GetByTelegramUserIdAsync(user.Id);
+        if (customer is null)
+        {
+            var token = ExtractStartToken(message.Text);
+            var accepted = token is not null &&
+                await _telegramInviteService.TryUseAsync(token, user.Id);
+
+            if (!accepted)
+            {
+                await SendInviteRequiredMessageAsync(message.Chat.Id);
+                return;
+            }
         }
 
         await _customerService.CreateOrUpdateAsync(
@@ -2936,6 +2978,12 @@ public class TelegramUpdateHandler
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
+                    "🔗 Müştəri dəvət linki",
+                    "admin:invite:create")
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData(
                     "👤 Müştəri menyusu",
                     "admin:customer-menu")
             }
@@ -2962,6 +3010,68 @@ public class TelegramUpdateHandler
                 text,
                 new WebAppInfo { Url = _telegramOptions.MiniAppUrl!.Trim() }));
     }
+
+    private async Task SendNewCustomerInviteAsync(long chatId)
+    {
+        var bot = await _botClient.GetMe();
+
+        if (string.IsNullOrWhiteSpace(bot.Username))
+            throw new InvalidOperationException(
+                "Telegram bot username is not available.");
+
+        var token = await _telegramInviteService.CreateAsync();
+        var url = $"https://t.me/{bot.Username}?start={token}";
+
+        await _botClient.SendMessage(
+            chatId,
+            "🔗 Yeni birdəfəlik müştəri dəvət linki:\n\n" +
+            url +
+            "\n\nLink ilk müştəri START düyməsinə basdıqdan sonra " +
+            "istifadə edilmiş sayılacaq.",
+            replyMarkup: new InlineKeyboardMarkup(
+                InlineKeyboardButton.WithCallbackData(
+                    "🔄 Yeni link yarat",
+                    "admin:invite:create")));
+    }
+
+    private async Task<bool> HasCustomerBotAccessAsync(
+        long telegramUserId)
+    {
+        if (telegramUserId == _telegramOptions.AdminUserId)
+            return true;
+
+        var customer = await _customerService.GetByTelegramUserIdAsync(
+            telegramUserId);
+
+        return customer is not null;
+    }
+
+    private Task SendInviteRequiredMessageAsync(long chatId)
+    {
+        return _botClient.SendMessage(
+            chatId,
+            "Bu bot yalnız dəvət linki ilə istifadə olunur. " +
+            "Zəhmət olmasa sizə göndərilmiş StockMate linkindən daxil olun.");
+    }
+
+    private static string? ExtractStartToken(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var parts = text.Split(
+            ' ',
+            2,
+            StringSplitOptions.RemoveEmptyEntries |
+            StringSplitOptions.TrimEntries);
+
+        return parts.Length == 2 && parts[0].StartsWith(
+            "/start",
+            StringComparison.OrdinalIgnoreCase)
+            ? parts[1]
+            : null;
+    }
+
     private async Task SendAdminOrderListAsync(
     long chatId,
     string title,

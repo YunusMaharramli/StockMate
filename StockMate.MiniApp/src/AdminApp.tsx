@@ -23,7 +23,7 @@ import type {
   StockPurchase,
 } from './models';
 
-type Section = 'home' | 'orders' | 'products' | 'stock' | 'shortages' | 'purchases' | 'reports' | 'companies' | 'staff' | 'customers' | 'history';
+type Section = 'home' | 'orders' | 'products' | 'stock' | 'shortages' | 'purchases' | 'reports' | 'companies' | 'staff' | 'customers' | 'invites' | 'history';
 type OrderFilter = 'new' | 'active' | 'partial' | 'special' | 'completed' | 'cancelled';
 
 const now = new Date().toISOString();
@@ -405,6 +405,7 @@ export default function AdminApp() {
       setStaff(items => items.map(item => item.id === worker.id ? { ...item, isActive: !item.isActive } : item));
     }, 'İşçi statusu yeniləndi.')} />}
     {section === 'customers' && <CustomersScreen customers={customers} orders={orders} demo={demo} back={() => openSection('home')} loadOrders={id => demo ? Promise.resolve(orders.filter(item => item.customerId === id)) : api.getCustomerOrders(id)} />}
+    {section === 'invites' && <InvitesScreen demo={demo} back={() => openSection('home')} create={async () => demo ? `https://t.me/StockMateAzBot?start=${crypto.randomUUID().replaceAll('-', '')}` : (await api.createCustomerInvite()).url} />}
     <BottomNav section={section} open={openSection} />
     {loading && <div className="busy"><span className="spinner" /></div>}
   </main>;
@@ -427,6 +428,7 @@ function Home({ orders, products, staff, open }: { orders: Order[]; products: Pr
     ['companies', '🚚', 'Çatdırılma şirkətləri', 'Şirkətləri idarə et', 0],
     ['staff', '👷', 'İşçilər', 'Komanda və statuslar', staff.filter(item => item.role === 'Worker' && item.isActive).length],
     ['customers', '👥', 'Müştərilər', 'Profil və sifarişlər', 0],
+    ['invites', '🔗', 'Dəvət linkləri', 'Yeni müştəri üçün birdəfəlik link', 0],
     ['history', '📜', 'Tarixçə', 'Tamamlanan və ləğv edilən', orders.filter(item => ['Completed', 'Cancelled'].includes(item.status)).length],
   ];
   return <section className="screen"><div className="hero"><span>İdarəetmə mərkəzi</span><h1>Bu gün nəyi idarə edirik?</h1><p>Sifariş, stok, məhsul və işçilər bir yerdə.</p></div><div className="dashboard-grid">{cards.map(([id, icon, title, subtitle, count]) => <button key={id} className="dashboard-card" onClick={() => open(id)}><span className="card-icon">{icon}</span><span><strong>{title}</strong><small>{subtitle}</small></span>{count > 0 && <b>{count}</b>}<em>›</em></button>)}</div></section>;
@@ -568,6 +570,56 @@ function StaffScreen({ staff, back, add, toggle }: { staff: Staff[]; back: () =>
 function WorkerForm({ close, save }: { close: () => void; save: (data: { telegramUserId: number; firstName: string; lastName?: string; username?: string }) => Promise<void> }) {
   const [id, setId] = useState(''); const [first, setFirst] = useState(''); const [last, setLast] = useState(''); const [username, setUsername] = useState('');
   return <div className="modal"><form className="sheet" onSubmit={event => { event.preventDefault(); save({ telegramUserId: Number(id), firstName: first.trim(), lastName: last.trim() || undefined, username: username.replace('@', '').trim() || undefined }); }}><div className="sheet-title"><h2>Yeni işçi</h2><button type="button" onClick={close}>×</button></div><label>Telegram ID<input type="number" required value={id} onChange={event => setId(event.target.value)} /></label><label>Ad<input required value={first} onChange={event => setFirst(event.target.value)} /></label><label>Soyad<input value={last} onChange={event => setLast(event.target.value)} /></label><label>Username<input value={username} onChange={event => setUsername(event.target.value)} /></label><button className="primary">Əlavə et</button></form></div>;
+}
+
+function InvitesScreen({ demo, back, create }: { demo: boolean; back: () => void; create: () => Promise<string> }) {
+  const [url, setUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  async function createInvite() {
+    setBusy(true);
+    setMessage('');
+    try {
+      setUrl(await create());
+      setMessage('Yeni birdəfəlik link yaradıldı.');
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : 'Link yaratmaq mümkün olmadı.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyInvite() {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setMessage('Link kopyalandı.');
+    } catch {
+      setMessage('Linki seçib əl ilə kopyalayın.');
+    }
+  }
+
+  return <section className="screen">
+    <Heading title="Dəvət linkləri" back={back} />
+    <article className="panel invite-panel">
+      <span className="invite-icon">🔗</span>
+      <h2>Yeni müştəri dəvəti</h2>
+      <p>Müştəri linkə daxil olub START düyməsinə basacaq. Link yalnız ilk Telegram hesabı üçün işləyəcək.</p>
+      <button className="primary wide-space" disabled={busy} onClick={createInvite}>
+        {busy ? 'Yaradılır…' : 'Yeni link yarat'}
+      </button>
+      {url && <div className="invite-result">
+        <input readOnly value={url} onFocus={event => event.currentTarget.select()} />
+        <div className="invite-actions">
+          <button onClick={copyInvite}>📋 Kopyala</button>
+          <a href={`https://t.me/share/url?url=${encodeURIComponent(url)}`} target="_blank" rel="noreferrer">Telegram-da paylaş</a>
+        </div>
+      </div>}
+      {message && <small>{message}</small>}
+      {demo && <p className="hint">Demo rejimində yaradılan link database-ə yazılmır.</p>}
+    </article>
+  </section>;
 }
 
 function CustomersScreen({ customers, orders, demo, back, loadOrders }: { customers: Customer[]; orders: Order[]; demo: boolean; back: () => void; loadOrders: (id: string) => Promise<Order[]> }) {

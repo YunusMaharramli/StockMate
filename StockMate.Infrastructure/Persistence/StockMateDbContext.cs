@@ -41,6 +41,8 @@ public class StockMateDbContext : DbContext
     Set<SaleRecord>();
     public DbSet<SaleRecordItem> SaleRecordItems =>
         Set<SaleRecordItem>();
+    public DbSet<TelegramInvite> TelegramInvites =>
+    Set<TelegramInvite>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

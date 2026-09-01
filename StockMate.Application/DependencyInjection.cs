@@ -10,6 +10,7 @@ using StockMate.Application.Shipments.Services;
 using StockMate.Application.Shortages.Services;
 using StockMate.Application.Staff.Services;
 using StockMate.Application.StockPurchases.Services;
+using StockMate.Application.TelegramInvites.Services;
 
 namespace StockMate.Application;
 
@@ -35,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IDeliveryCompanyService, DeliveryCompanyService>();
         services.AddScoped<IStockPurchaseService,StockPurchaseService>();
         services.AddScoped<IInventoryReportService, InventoryReportService>();
+        services.AddScoped<ITelegramInviteService, TelegramInviteService>();
         return services;
     }
 }

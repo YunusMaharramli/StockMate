@@ -482,6 +482,7 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(18,2)");
 
                     b.Property<int>("StockQuantity")
+                        .IsConcurrencyToken()
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
@@ -761,6 +762,35 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                     b.HasIndex("StockPurchaseId");
 
                     b.ToTable("StockPurchaseItems", (string)null);
+                });
+
+            modelBuilder.Entity("StockMate.Domain.Entities.TelegramInvite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("UsedAtUtc")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("UsedByTelegramUserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.ToTable("TelegramInvites", (string)null);
                 });
 
             modelBuilder.Entity("StockMate.Domain.Entities.Cart", b =>

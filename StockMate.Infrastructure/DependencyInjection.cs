@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IDeliveryCompanyRepository,DeliveryCompanyRepository>();
         services.AddScoped<IStockPurchaseRepository,StockPurchaseRepository>();
         services.AddScoped<ISaleRecordRepository,SaleRecordRepository>();
+        services.AddScoped<ITelegramInviteRepository,TelegramInviteRepository>();
         return services;
     }
 }
