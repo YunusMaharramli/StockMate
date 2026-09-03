@@ -112,6 +112,8 @@ export interface Customer {
   latitude?: number;
   longitude?: number;
   productPageSize: number;
+  isBlocked: boolean;
+  blockedAtUtc?: string;
 }
 
 export interface Assignment {

@@ -1458,7 +1458,8 @@ public class TelegramUpdateHandler
         }
 
         var customer = await _customerService.GetByTelegramUserIdAsync(user.Id);
-        if (customer is null)
+        var shouldReactivate = customer?.IsBlocked == true;
+        if (customer is null || customer.IsBlocked)
         {
             var token = ExtractStartToken(message.Text);
             var accepted = token is not null &&
@@ -1477,6 +1478,11 @@ public class TelegramUpdateHandler
                 user.FirstName,
                 user.LastName,
                 user.Username));
+
+        if (shouldReactivate)
+            await _customerService.ReactivateAsync(user.Id);
+
+        _sessionStore.Clear(user.Id);
 
         await SendCustomerMainMenuAsync(message.Chat.Id);
     }
@@ -3043,7 +3049,7 @@ public class TelegramUpdateHandler
         var customer = await _customerService.GetByTelegramUserIdAsync(
             telegramUserId);
 
-        return customer is not null;
+        return customer is { IsBlocked: false };
     }
 
     private Task SendInviteRequiredMessageAsync(long chatId)

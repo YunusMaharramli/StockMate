@@ -98,6 +98,7 @@ export const api = {
     return response.json() as Promise<{ imageReference: string }>;
   },
   getCustomers: () => request<Customer[]>('/api/miniapp/admin/customers'),
+  blockCustomer: (id: string) => request<void>(`/api/miniapp/admin/customers/${id}/block`, { method: 'PUT' }),
   createCustomerInvite: () => request<{ url: string }>('/api/miniapp/admin/invites', { method: 'POST' }),
   getCustomerOrders: (id: string) => request<Order[]>(`/api/miniapp/admin/customers/${id}/orders`),
   getAssignment: (number: number) => request<Assignment | null>(`/api/miniapp/admin/orders/${number}/assignment`),

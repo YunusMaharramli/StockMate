@@ -45,6 +45,16 @@ public sealed class MiniAppCustomerInsightsController : ControllerBase
             cancellationToken));
     }
 
+    [HttpPut("{customerId:guid}/block")]
+    public async Task<IActionResult> Block(
+        Guid customerId,
+        CancellationToken cancellationToken)
+    {
+        await RequireAdminAsync(cancellationToken);
+        await _customers.BlockAsync(customerId, cancellationToken);
+        return NoContent();
+    }
+
     private async Task RequireAdminAsync(CancellationToken cancellationToken)
         => await _identity.RequireAsync(
             Request.Headers["X-Telegram-Init-Data"].ToString(),

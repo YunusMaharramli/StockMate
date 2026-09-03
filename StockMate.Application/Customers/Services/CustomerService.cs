@@ -116,7 +116,9 @@ public class CustomerService : ICustomerService
             customer.DeliveryAddress,
             customer.Latitude,
             customer.Longitude,
-            customer.ProductPageSize);
+            customer.ProductPageSize,
+            customer.IsBlocked,
+            customer.BlockedAtUtc);
     }
     public async Task<CustomerDto?> GetByIdAsync(
     Guid id,
@@ -136,5 +138,31 @@ public class CustomerService : ICustomerService
     {
         var customers = await _customerRepository.GetAllAsync(cancellationToken);
         return customers.Select(MapCustomer).ToList();
+    }
+
+    public async Task BlockAsync(
+        Guid customerId,
+        CancellationToken cancellationToken = default)
+    {
+        var customer = await _customerRepository.GetByIdAsync(
+            customerId,
+            cancellationToken)
+            ?? throw new KeyNotFoundException(
+                $"Customer with ID '{customerId}' was not found.");
+
+        customer.Block();
+        await _customerRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ReactivateAsync(
+        long telegramUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var customer = await GetRequiredCustomerAsync(
+            telegramUserId,
+            cancellationToken);
+
+        customer.Reactivate();
+        await _customerRepository.SaveChangesAsync(cancellationToken);
     }
 }

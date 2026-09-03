@@ -34,8 +34,8 @@ const defaultFrom = defaultFromDate.toISOString().slice(0, 10);
 const nowDate = new Date(now);
 const defaultLocalDateTime = new Date(nowDate.getTime() - nowDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 const demoCustomers: Customer[] = [
-  { id: 'c1', telegramUserId: 123456789, firstName: 'Yunus', lastName: 'Məhərrəmli', username: 'yunus', phoneNumber: '077 329 08 78', deliveryAddress: 'Nərimanov, Bakı', productPageSize: 10 },
-  { id: 'c2', telegramUserId: 987654321, firstName: 'Aysel', lastName: 'Əliyeva', phoneNumber: '050 555 11 22', deliveryAddress: 'Yasamal, Bakı', productPageSize: 10 },
+  { id: 'c1', telegramUserId: 123456789, firstName: 'Yunus', lastName: 'Məhərrəmli', username: 'yunus', phoneNumber: '077 329 08 78', deliveryAddress: 'Nərimanov, Bakı', productPageSize: 10, isBlocked: false },
+  { id: 'c2', telegramUserId: 987654321, firstName: 'Aysel', lastName: 'Əliyeva', phoneNumber: '050 555 11 22', deliveryAddress: 'Yasamal, Bakı', productPageSize: 10, isBlocked: false },
 ];
 const demoStaff: Staff[] = [
   { id: 'a1', telegramUserId: 111111, firstName: 'Admin', role: 'Admin', isActive: true },
@@ -404,7 +404,10 @@ export default function AdminApp() {
       if (!demo) await api.setWorkerActive(worker.id, !worker.isActive);
       setStaff(items => items.map(item => item.id === worker.id ? { ...item, isActive: !item.isActive } : item));
     }, 'İşçi statusu yeniləndi.')} />}
-    {section === 'customers' && <CustomersScreen customers={customers} orders={orders} demo={demo} back={() => openSection('home')} loadOrders={id => demo ? Promise.resolve(orders.filter(item => item.customerId === id)) : api.getCustomerOrders(id)} />}
+    {section === 'customers' && <CustomersScreen customers={customers} orders={orders} demo={demo} back={() => openSection('home')} loadOrders={id => demo ? Promise.resolve(orders.filter(item => item.customerId === id)) : api.getCustomerOrders(id)} block={customer => run(async () => {
+      if (!demo) await api.blockCustomer(customer.id);
+      setCustomers(items => items.map(item => item.id === customer.id ? { ...item, isBlocked: true, blockedAtUtc: now } : item));
+    }, 'Müştərinin bot girişi bağlandı. Yeni dəvət linki ilə yenidən aktivləşəcək.')} />}
     {section === 'invites' && <InvitesScreen demo={demo} back={() => openSection('home')} create={async () => demo ? `https://t.me/StockMateAzBot?start=${crypto.randomUUID().replaceAll('-', '')}` : (await api.createCustomerInvite()).url} />}
     <BottomNav section={section} open={openSection} />
     {loading && <div className="busy"><span className="spinner" /></div>}
@@ -622,11 +625,50 @@ function InvitesScreen({ demo, back, create }: { demo: boolean; back: () => void
   </section>;
 }
 
-function CustomersScreen({ customers, orders, demo, back, loadOrders }: { customers: Customer[]; orders: Order[]; demo: boolean; back: () => void; loadOrders: (id: string) => Promise<Order[]> }) {
-  const [selected, setSelected] = useState<Customer | null>(null); const [customerOrders, setCustomerOrders] = useState<Order[]>([]); const [search, setSearch] = useState('');
-  const list = customers.filter(item => `${fullName(item)} ${item.phoneNumber} ${item.username}`.toLowerCase().includes(search.toLowerCase()));
-  async function open(customer: Customer) { setSelected(customer); setCustomerOrders(await loadOrders(customer.id)); }
-  return <section className="screen"><Heading title="Müştərilər" back={back} /><input className="search" placeholder="Ad, telefon və username" value={search} onChange={event => setSearch(event.target.value)} /><div className="list top-gap">{list.map(customer => <button className="list-card" key={customer.id} onClick={() => open(customer)}><div className="row"><h3>👤 {fullName(customer)}</h3><b>{orders.filter(item => item.customerId === customer.id).length || ''}</b></div><p>📞 {customer.phoneNumber || 'Nömrə yoxdur'}</p><p>📍 {customer.deliveryAddress || 'Ünvan yoxdur'}</p></button>)}</div>{selected && <div className="modal"><div className="sheet"><div className="sheet-title"><div><small>Müştəri profili</small><h2>{fullName(selected)}</h2></div><button onClick={() => setSelected(null)}>×</button></div><a href={`tel:${selected.phoneNumber}`}>📞 {selected.phoneNumber || 'Nömrə yoxdur'}</a><p>📍 {selected.deliveryAddress || 'Ünvan yoxdur'}</p>{selected.username && <p>Telegram: @{selected.username}</p>}<h3>Sifarişlər ({customerOrders.length})</h3><div className="movement-list">{customerOrders.map(order => <div key={order.id}><span>#{order.orderNumber} · {orderLabels[order.status]}</span><b>{money(order.totalAmount)}</b><small>{date(order.createdAtUtc)}</small></div>)}</div>{demo && <p className="hint">Demo müştəri məlumatlarıdır.</p>}</div></div>}</section>;
+function CustomersScreen({ customers, orders, demo, back, loadOrders, block }: { customers: Customer[]; orders: Order[]; demo: boolean; back: () => void; loadOrders: (id: string) => Promise<Order[]>; block: (customer: Customer) => Promise<boolean> }) {
+  const [selected, setSelected] = useState<Customer | null>(null);
+  const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
+  const [search, setSearch] = useState('');
+  const list = customers.filter(item =>
+    !item.isBlocked &&
+    `${fullName(item)} ${item.phoneNumber} ${item.username}`.toLowerCase().includes(search.toLowerCase()));
+
+  async function open(customer: Customer) {
+    setSelected(customer);
+    setCustomerOrders(await loadOrders(customer.id));
+  }
+
+  async function confirmBlock(customer: Customer) {
+    const confirmed = window.confirm(
+      `${fullName(customer)} üçün bot girişini bağlamaq istəyirsiniz?\n\n` +
+      'Sifariş tarixçəsi silinməyəcək. Müştəri yalnız yeni dəvət linki ilə yenidən daxil ola biləcək.');
+
+    if (!confirmed)
+      return;
+
+    if (await block(customer))
+      setSelected(null);
+  }
+
+  return <section className="screen">
+    <Heading title="Müştərilər" back={back} />
+    <input className="search" placeholder="Ad, telefon və username" value={search} onChange={event => setSearch(event.target.value)} />
+    <div className="list top-gap">
+      {list.map(customer => <article className="list-card customer-card" key={customer.id}>
+        <button className="customer-open" onClick={() => open(customer)}>
+          <div className="row">
+            <h3>👤 {fullName(customer)}</h3>
+            <b>{orders.filter(item => item.customerId === customer.id).length || ''}</b>
+          </div>
+          <p>📞 {customer.phoneNumber || 'Nömrə yoxdur'}</p>
+          <p>📍 {customer.deliveryAddress || 'Ünvan yoxdur'}</p>
+        </button>
+        <button className="customer-block" aria-label={`${fullName(customer)} üçün bot girişini bağla`} title="Bot girişini bağla" onClick={() => confirmBlock(customer)}>×</button>
+      </article>)}
+      {!list.length && <Empty text="Axtarışa uyğun müştəri yoxdur" />}
+    </div>
+    {selected && <div className="modal"><div className="sheet"><div className="sheet-title"><div><small>Müştəri profili</small><h2>{fullName(selected)}</h2></div><button onClick={() => setSelected(null)}>×</button></div><a href={`tel:${selected.phoneNumber}`}>📞 {selected.phoneNumber || 'Nömrə yoxdur'}</a><p>📍 {selected.deliveryAddress || 'Ünvan yoxdur'}</p>{selected.username && <p>Telegram: @{selected.username}</p>}<h3>Sifarişlər ({customerOrders.length})</h3><div className="movement-list">{customerOrders.map(order => <div key={order.id}><span>#{order.orderNumber} · {orderLabels[order.status]}</span><b>{money(order.totalAmount)}</b><small>{date(order.createdAtUtc)}</small></div>)}</div>{demo && <p className="hint">Demo müştəri məlumatlarıdır.</p>}</div></div>}
+  </section>;
 }
 
 function WorkerPanel({ assignments, shipments, loading, demo, error, onRefresh, onChange }: { assignments: Assignment[]; shipments: Shipment[]; loading: boolean; demo: boolean; error: string; onRefresh: () => void; onChange: (shipment: Shipment, status: ShipmentStatus) => void }) {

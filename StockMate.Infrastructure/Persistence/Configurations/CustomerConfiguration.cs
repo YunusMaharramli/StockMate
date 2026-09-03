@@ -38,6 +38,10 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .HasDefaultValue(5)
             .IsRequired();
 
+        builder.Property(customer => customer.IsBlocked)
+            .HasDefaultValue(false)
+            .IsRequired();
+
         builder.Property(customer => customer.CreatedAtUtc)
             .IsRequired();
     }

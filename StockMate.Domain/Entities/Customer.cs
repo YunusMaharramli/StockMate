@@ -53,6 +53,10 @@ public class Customer
 
     public DateTime? UpdatedAtUtc { get; private set; }
 
+    public bool IsBlocked { get; private set; }
+
+    public DateTime? BlockedAtUtc { get; private set; }
+
     public void UpdateProfile(
         string firstName,
         string? lastName,
@@ -94,6 +98,26 @@ public class Customer
                 "Page size must be 5, 10 or 20.");
 
         ProductPageSize = pageSize;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public void Block()
+    {
+        if (IsBlocked)
+            return;
+
+        IsBlocked = true;
+        BlockedAtUtc = DateTime.UtcNow;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public void Reactivate()
+    {
+        if (!IsBlocked)
+            return;
+
+        IsBlocked = false;
+        BlockedAtUtc = null;
         UpdatedAtUtc = DateTime.UtcNow;
     }
 }

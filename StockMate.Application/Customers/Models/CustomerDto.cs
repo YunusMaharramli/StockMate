@@ -10,4 +10,6 @@ public sealed record CustomerDto(
     string? DeliveryAddress,
     double? Latitude,
     double? Longitude,
-    int ProductPageSize);
+    int ProductPageSize,
+    bool IsBlocked,
+    DateTime? BlockedAtUtc);

@@ -27,4 +27,12 @@ public interface ICustomerService
 
     Task<IReadOnlyList<CustomerDto>> GetAllAsync(
         CancellationToken cancellationToken = default);
+
+    Task BlockAsync(
+        Guid customerId,
+        CancellationToken cancellationToken = default);
+
+    Task ReactivateAsync(
+        long telegramUserId,
+        CancellationToken cancellationToken = default);
 }
