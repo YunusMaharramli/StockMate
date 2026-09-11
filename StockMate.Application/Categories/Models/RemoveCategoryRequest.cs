@@ -4,7 +4,8 @@ public enum CategoryRemovalMode
 {
     MoveProducts,
     ArchiveCategory,
-    ArchiveProducts
+    ArchiveProducts,
+    DeleteProducts
 }
 
 public sealed record RemoveCategoryRequest(

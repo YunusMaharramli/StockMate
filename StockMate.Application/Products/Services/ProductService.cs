@@ -403,6 +403,24 @@ public class ProductService : IProductService
         await _productRepository.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteAsync(
+        Guid productId,
+        CancellationToken cancellationToken = default)
+    {
+        var product = await GetRequiredProductAsync(productId, cancellationToken);
+
+        if (await _productRepository.HasHistoricalReferencesAsync(
+                productId,
+                cancellationToken))
+        {
+            throw new InvalidOperationException(
+                "Bu məhsul sifariş və ya alış tarixçəsində istifadə olunub, ona görə həmişəlik silinə bilməz. Məhsulu arxivləyin.");
+        }
+
+        await _productRepository.PrepareDeleteAsync(product, cancellationToken);
+        await _productRepository.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task ApplyBulkActionAsync(
         BulkProductActionRequest request,
         CancellationToken cancellationToken = default)

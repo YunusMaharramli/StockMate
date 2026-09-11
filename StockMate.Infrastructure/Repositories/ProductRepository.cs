@@ -225,6 +225,38 @@ public class ProductRepository : IProductRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<bool> HasHistoricalReferencesAsync(
+        Guid productId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.OrderItems.AnyAsync(
+                   item => item.ProductId == productId,
+                   cancellationToken) ||
+               await _dbContext.StockPurchaseItems.AnyAsync(
+                   item => item.ProductId == productId,
+                   cancellationToken) ||
+               await _dbContext.SaleRecordItems.AnyAsync(
+                   item => item.ProductId == productId,
+                   cancellationToken);
+    }
+
+    public async Task PrepareDeleteAsync(
+        Product product,
+        CancellationToken cancellationToken = default)
+    {
+        var cartItems = await _dbContext.CartItems
+            .Where(item => item.ProductId == product.Id)
+            .ToListAsync(cancellationToken);
+
+        var stockMovements = await _dbContext.StockMovements
+            .Where(movement => movement.ProductId == product.Id)
+            .ToListAsync(cancellationToken);
+
+        _dbContext.CartItems.RemoveRange(cartItems);
+        _dbContext.StockMovements.RemoveRange(stockMovements);
+        _dbContext.Products.Remove(product);
+    }
+
     public Task<int> CountAdminProductsAsync(
         AdminProductQuery query,
         CancellationToken cancellationToken = default)

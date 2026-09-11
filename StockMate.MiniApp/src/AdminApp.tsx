@@ -529,7 +529,7 @@ function ProductsScreen({ products, categories, subcategories, demo, back, busy,
   const [editor, setEditor] = useState<Product | 'new' | null>(null);
   const [manageCategories, setManageCategories] = useState(false);
   const [search, setSearch] = useState('');
-  const [only, setOnly] = useState<'all' | 'active' | 'passive' | 'archived'>('all');
+  const [only, setOnly] = useState<'current' | 'all' | 'active' | 'passive' | 'archived'>('current');
   const [categoryId, setCategoryId] = useState('');
   const [subcategoryId, setSubcategoryId] = useState('');
   const [stockFilter, setStockFilter] = useState<'all' | 'in' | 'out' | 'low'>('all');
@@ -537,42 +537,60 @@ function ProductsScreen({ products, categories, subcategories, demo, back, busy,
   const [bulkAction, setBulkAction] = useState<'Activate' | 'Deactivate' | 'Archive' | 'Restore' | 'Move'>('Deactivate');
   const [bulkCategoryId, setBulkCategoryId] = useState('');
   const [bulkSubcategoryId, setBulkSubcategoryId] = useState('');
+  const [actionError, setActionError] = useState('');
   const availableSubcategories = subcategories.filter(item => !categoryId || item.categoryId === categoryId);
   const list = products
     .filter(item => `${item.name} ${item.code}`.toLowerCase().includes(search.toLowerCase()))
     .filter(item => !categoryId || item.categoryId === categoryId)
     .filter(item => !subcategoryId || item.subcategoryId === subcategoryId)
-    .filter(item => only === 'all' || (only === 'archived' ? item.isArchived : !item.isArchived && item.isActive === (only === 'active')))
+    .filter(item => only === 'all' || (only === 'current' ? !item.isArchived : only === 'archived' ? item.isArchived : !item.isArchived && item.isActive === (only === 'active')))
     .filter(item => stockFilter === 'all' || (stockFilter === 'in' ? item.stockQuantity > 0 : stockFilter === 'out' ? item.stockQuantity <= 0 : item.isLowStock));
 
   async function archive(product: Product) {
     if (demo || !window.confirm(`${product.name} məhsulunu arxivləşdirmək istəyirsiniz?`)) return;
-    await api.archiveProduct(product.id); await reload();
+    setActionError('');
+    try { await api.archiveProduct(product.id); await reload(); }
+    catch (reason) { setActionError(reason instanceof Error ? reason.message : 'Məhsul arxivlənə bilmədi.'); }
   }
   async function restore(product: Product) {
     if (demo) return;
-    await api.restoreProduct(product.id); await reload();
+    setActionError('');
+    try { await api.restoreProduct(product.id); await reload(); }
+    catch (reason) { setActionError(reason instanceof Error ? reason.message : 'Məhsul bərpa edilə bilmədi.'); }
+  }
+  async function remove(product: Product) {
+    if (demo || !window.confirm(`${product.name} məhsulu həmişəlik silinsin? Bu əməliyyat geri qaytarılmır.`)) return;
+    setActionError('');
+    try {
+      await api.deleteProduct(product.id);
+      setSelectedIds(values => values.filter(id => id !== product.id));
+      await reload();
+    } catch (reason) { setActionError(reason instanceof Error ? reason.message : 'Məhsul silinə bilmədi.'); }
   }
   async function applyBulk() {
     if (demo || !selectedIds.length) return;
     if (bulkAction === 'Move' && !bulkCategoryId) return;
-    await api.applyBulkProductAction(selectedIds, bulkAction, bulkCategoryId || undefined, bulkSubcategoryId || undefined);
-    setSelectedIds([]); await reload();
+    setActionError('');
+    try {
+      await api.applyBulkProductAction(selectedIds, bulkAction, bulkCategoryId || undefined, bulkSubcategoryId || undefined);
+      setSelectedIds([]); await reload();
+    } catch (reason) { setActionError(reason instanceof Error ? reason.message : 'Toplu əməliyyat yerinə yetirilə bilmədi.'); }
   }
 
   return <section className="screen">
     <Heading title="Məhsullar" back={back} action={<button className="heading-action" onClick={() => setEditor('new')}>＋ Əlavə et</button>} />
-    <button className="secondary wide-space" onClick={() => setManageCategories(true)}>Kateqoriya və ölçüləri idarə et</button>
+    <button className="secondary wide-space catalog-manager-button" onClick={() => setManageCategories(true)}>Kateqoriya və ölçüləri idarə et</button>
     <div className="toolbar catalog-toolbar">
       <input className="search" placeholder="Məhsul və ya kod axtar" value={search} onChange={event => setSearch(event.target.value)} />
       <select value={categoryId} onChange={event => { setCategoryId(event.target.value); setSubcategoryId(''); }}><option value="">Bütün kateqoriyalar</option>{categories.filter(item => !item.isArchived).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
       <select value={subcategoryId} onChange={event => setSubcategoryId(event.target.value)}><option value="">Bütün ölçülər</option>{availableSubcategories.filter(item => !item.isArchived).map(item => <option key={item.id} value={item.id}>{item.name} · {item.categoryName}</option>)}</select>
-      <select value={only} onChange={event => setOnly(event.target.value as typeof only)}><option value="all">Bütün statuslar</option><option value="active">Aktiv</option><option value="passive">Passiv</option><option value="archived">Arxiv</option></select>
+      <select value={only} onChange={event => setOnly(event.target.value as typeof only)}><option value="current">Cari məhsullar</option><option value="active">Aktiv</option><option value="passive">Passiv</option><option value="archived">Arxiv</option><option value="all">Hamısı, arxiv daxil</option></select>
       <select value={stockFilter} onChange={event => setStockFilter(event.target.value as typeof stockFilter)}><option value="all">Bütün stoklar</option><option value="in">Stokda var</option><option value="out">Stok bitib</option><option value="low">Az qalıb</option></select>
-      <button onClick={() => { setSearch(''); setCategoryId(''); setSubcategoryId(''); setOnly('all'); setStockFilter('all'); }}>Filterləri təmizlə</button>
+      <button onClick={() => { setSearch(''); setCategoryId(''); setSubcategoryId(''); setOnly('current'); setStockFilter('all'); }}>Filterləri təmizlə</button>
     </div>
+    {actionError && <p className="danger-text">{actionError}</p>}
     {!!selectedIds.length && <div className="bulk-bar"><strong>{selectedIds.length} məhsul seçilib</strong><select value={bulkAction} onChange={event => setBulkAction(event.target.value as typeof bulkAction)}><option value="Activate">Aktiv et</option><option value="Deactivate">Passiv et</option><option value="Archive">Arxivlə</option><option value="Restore">Arxivdən çıxar</option><option value="Move">Kateqoriyaya köçür</option></select>{bulkAction === 'Move' && <><select required value={bulkCategoryId} onChange={event => { setBulkCategoryId(event.target.value); setBulkSubcategoryId(''); }}><option value="">Hədəf kateqoriya</option>{categories.filter(item => item.isActive && !item.isArchived).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select value={bulkSubcategoryId} onChange={event => setBulkSubcategoryId(event.target.value)}><option value="">Ölçüsüz</option>{subcategories.filter(item => item.categoryId === bulkCategoryId && item.isActive && !item.isArchived).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></>}<button className="primary" disabled={bulkAction === 'Move' && !bulkCategoryId} onClick={applyBulk}>Tətbiq et</button><button onClick={() => setSelectedIds([])}>Ləğv et</button></div>}
-    <div className="product-grid">{list.map(product => <article className={`product-card ${!product.isActive || product.isArchived ? 'passive' : ''}`} key={product.id}><label className="product-select"><input type="checkbox" checked={selectedIds.includes(product.id)} onChange={event => setSelectedIds(values => event.target.checked ? [...values, product.id] : values.filter(id => id !== product.id))} /> Seç</label><ProductImage product={product} /><div className="product-body"><div className="row"><strong>{product.name}</strong><Status value={product.isArchived ? 'Arxiv' : product.isActive ? 'Aktiv' : 'Passiv'} tone={product.isArchived || !product.isActive ? 'danger' : 'success'} /></div><small>{product.code}</small><p>{product.categoryName || 'Kateqoriyasız'}{product.subcategoryName ? ` · ${product.subcategoryName}` : ''}</p><p>{product.description}</p><div className="row"><b>{money(product.price)}</b><span className={product.isLowStock ? 'danger-text' : ''}>Stok: {product.stockQuantity} · Minimum: {product.minimumStockQuantity}</span></div><div className="card-actions"><button onClick={() => setEditor(product)}>Redaktə et</button>{product.isArchived ? <button onClick={() => restore(product)}>Arxivdən çıxar</button> : <><button className={product.isActive ? 'danger-button' : ''} onClick={() => toggle(product)}>{product.isActive ? 'Passiv et' : 'Aktiv et'}</button><button className="danger-button" onClick={() => archive(product)}>Arxivlə</button></>}</div></div></article>)}</div>
+    <div className="product-grid">{list.map(product => <article className={`product-card ${!product.isActive || product.isArchived ? 'passive' : ''}`} key={product.id}><label className="product-select"><input type="checkbox" checked={selectedIds.includes(product.id)} onChange={event => setSelectedIds(values => event.target.checked ? [...values, product.id] : values.filter(id => id !== product.id))} /> Seç</label><ProductImage product={product} /><div className="product-body"><div className="row"><strong>{product.name}</strong><Status value={product.isArchived ? 'Arxiv' : product.isActive ? 'Aktiv' : 'Passiv'} tone={product.isArchived || !product.isActive ? 'danger' : 'success'} /></div><small>{product.code}</small><p>{product.categoryName || 'Kateqoriyasız'}{product.subcategoryName ? ` · ${product.subcategoryName}` : ''}</p><p>{product.description}</p><div className="row"><b>{money(product.price)}</b><span className={product.isLowStock ? 'danger-text' : ''}>Stok: {product.stockQuantity} · Minimum: {product.minimumStockQuantity}</span></div><div className="card-actions"><button onClick={() => setEditor(product)}>Redaktə et</button>{product.isArchived ? <button onClick={() => restore(product)}>Arxivdən çıxar</button> : <><button className={product.isActive ? 'danger-button' : ''} onClick={() => toggle(product)}>{product.isActive ? 'Passiv et' : 'Aktiv et'}</button><button className="danger-button" onClick={() => archive(product)}>Arxivlə</button></>}<button className="danger-button" onClick={() => remove(product)}>Həmişəlik sil</button></div></div></article>)}</div>
     {!list.length && <Empty text="Məhsul tapılmadı" />}
     {editor && <ProductEditor product={editor === 'new' ? null : editor} categories={categories} subcategories={subcategories} demo={demo} busy={busy} close={() => setEditor(null)} reload={reload} save={async (data, image) => { await save(editor === 'new' ? null : editor, data, image); setEditor(null); }} />}
     {manageCategories && <CategoryManager categories={categories} subcategories={subcategories} demo={demo} close={() => setManageCategories(false)} reload={reload} />}
@@ -594,11 +612,16 @@ function ProductEditor({ product, categories, subcategories, demo, busy, close, 
 
 function CategoryManager({ categories, subcategories, demo, close, reload }: { categories: Category[]; subcategories: Subcategory[]; demo: boolean; close: () => void; reload: () => Promise<void> }) {
   const [selectedCategoryId, setSelectedCategoryId] = useState(categories.find(item => !item.isArchived)?.id ?? categories[0]?.id ?? '');
+  const [showArchived, setShowArchived] = useState(false);
   const [categoryName, setCategoryName] = useState('');
   const [subcategoryName, setSubcategoryName] = useState('');
   const [error, setError] = useState('');
-  const selectedCategory = categories.find(item => item.id === selectedCategoryId);
-  const categorySubcategories = subcategories.filter(item => item.categoryId === selectedCategoryId);
+  const visibleCategories = categories.filter(item => showArchived || !item.isArchived);
+  const currentCategoryId = visibleCategories.some(item => item.id === selectedCategoryId)
+    ? selectedCategoryId
+    : visibleCategories[0]?.id ?? '';
+  const selectedCategory = visibleCategories.find(item => item.id === currentCategoryId);
+  const categorySubcategories = subcategories.filter(item => item.categoryId === currentCategoryId && (showArchived || !item.isArchived));
 
   async function execute(action: () => Promise<void>) {
     if (demo) { setError('Demo rejimində kateqoriya dəyişiklikləri saxlanmır.'); return; }
@@ -630,9 +653,11 @@ function CategoryManager({ categories, subcategories, demo, close, reload }: { c
       `“${category.name}” daxilində ${category.productCount} məhsul və ${category.subcategoryCount} alt kateqoriya var.\n\n` +
       '1 — Məhsulları başqa kateqoriyaya köçür və bunu sil\n' +
       '2 — Yalnız kateqoriyanı arxivlə\n' +
-      '3 — Məhsulları da arxivlə\n\nSeçimi yazın: 1, 2 və ya 3');
+      '3 — Məhsulları da arxivlə\n' +
+      '4 — Məhsulları, ölçüləri və kateqoriyanı həmişəlik sil\n\nSeçimi yazın: 1, 2, 3 və ya 4');
     if (choice === '2') await execute(() => api.removeCategory(category.id, 'ArchiveCategory'));
     if (choice === '3') await execute(() => api.removeCategory(category.id, 'ArchiveProducts'));
+    if (choice === '4' && window.confirm('Kateqoriya, ölçülər və silinə bilən məhsullar həmişəlik silinəcək. Davam edilsin?')) await execute(() => api.removeCategory(category.id, 'DeleteProducts'));
     if (choice === '1') {
       const targets = categories.filter(item => item.id !== category.id && item.isActive && !item.isArchived);
       if (!targets.length) { setError('Köçürmək üçün başqa aktiv kateqoriya yoxdur.'); return; }
@@ -643,8 +668,8 @@ function CategoryManager({ categories, subcategories, demo, close, reload }: { c
 
   async function addSubcategory(event: FormEvent) {
     event.preventDefault();
-    if (!selectedCategoryId || !subcategoryName.trim()) return;
-    await execute(async () => { await api.createSubcategory(selectedCategoryId, subcategoryName.trim(), categorySubcategories.length); setSubcategoryName(''); });
+    if (!currentCategoryId || !subcategoryName.trim()) return;
+    await execute(async () => { await api.createSubcategory(currentCategoryId, subcategoryName.trim(), categorySubcategories.length); setSubcategoryName(''); });
   }
 
   async function editSubcategory(subcategory: Subcategory) {
@@ -664,9 +689,11 @@ function CategoryManager({ categories, subcategories, demo, close, reload }: { c
       `“${subcategory.name}” daxilində ${subcategory.productCount} məhsul var.\n\n` +
       '1 — Məhsulları başqa alt kateqoriyaya köçür və bunu sil\n' +
       '2 — Yalnız alt kateqoriyanı arxivlə\n' +
-      '3 — Məhsulları da arxivlə\n\nSeçimi yazın: 1, 2 və ya 3');
+      '3 — Məhsulları da arxivlə\n' +
+      '4 — Məhsulları və alt kateqoriyanı həmişəlik sil\n\nSeçimi yazın: 1, 2, 3 və ya 4');
     if (choice === '2') await execute(() => api.removeSubcategory(subcategory.id, 'ArchiveSubcategory'));
     if (choice === '3') await execute(() => api.removeSubcategory(subcategory.id, 'ArchiveProducts'));
+    if (choice === '4' && window.confirm('Alt kateqoriya və silinə bilən məhsullar həmişəlik silinəcək. Davam edilsin?')) await execute(() => api.removeSubcategory(subcategory.id, 'DeleteProducts'));
     if (choice === '1') {
       const targets = subcategories.filter(item => item.id !== subcategory.id && item.isActive && !item.isArchived);
       if (!targets.length) { setError('Köçürmək üçün başqa aktiv alt kateqoriya yoxdur.'); return; }
@@ -679,7 +706,8 @@ function CategoryManager({ categories, subcategories, demo, close, reload }: { c
     <div className="sheet-title"><div><small>Kataloq quruluşu</small><h2>Kateqoriya və ölçülər</h2></div><button onClick={close}>×</button></div>
     {error && <p className="danger-text">{error}</p>}
     <form className="inline" onSubmit={addCategory}><input required placeholder="Yeni kateqoriya" value={categoryName} onChange={event => setCategoryName(event.target.value)} /><button>Əlavə et</button></form>
-    <div className="category-tabs">{categories.map(category => <button className={selectedCategoryId === category.id ? 'active' : ''} key={category.id} onClick={() => setSelectedCategoryId(category.id)}>{category.name}{category.isArchived ? ' · Arxiv' : !category.isActive ? ' · Passiv' : ''}</button>)}</div>
+    <button className="secondary" onClick={() => setShowArchived(value => !value)}>{showArchived ? 'Arxivi gizlət' : 'Arxivi göstər'}</button>
+    <div className="category-tabs">{visibleCategories.map(category => <button className={currentCategoryId === category.id ? 'active' : ''} key={category.id} onClick={() => setSelectedCategoryId(category.id)}>{category.name}{category.isArchived ? ' · Arxiv' : !category.isActive ? ' · Passiv' : ''}</button>)}</div>
     {selectedCategory && <article className="panel"><div className="row"><div><h3>{selectedCategory.name}</h3><small>{selectedCategory.productCount} məhsul · {selectedCategory.subcategoryCount} alt kateqoriya · sıra {selectedCategory.sortOrder}</small></div><Status value={selectedCategory.isArchived ? 'Arxiv' : selectedCategory.isActive ? 'Aktiv' : 'Passiv'} tone={selectedCategory.isActive && !selectedCategory.isArchived ? 'success' : 'danger'} /></div><div className="card-actions"><button onClick={() => editCategory(selectedCategory)}>Adı və sıranı dəyiş</button>{selectedCategory.isArchived ? <button onClick={() => execute(() => api.restoreCategory(selectedCategory.id))}>Arxivdən çıxar</button> : <button onClick={() => execute(() => api.setCategoryActive(selectedCategory.id, !selectedCategory.isActive))}>{selectedCategory.isActive ? 'Passiv et' : 'Aktiv et'}</button>}<button className="danger-button" onClick={() => removeCategory(selectedCategory)}>Sil / arxivlə</button></div></article>}
     {selectedCategory && !selectedCategory.isArchived && <form className="inline" onSubmit={addSubcategory}><input required placeholder="Yeni ölçü / alt kateqoriya" value={subcategoryName} onChange={event => setSubcategoryName(event.target.value)} /><button>Əlavə et</button></form>}
     <div className="list">{categorySubcategories.map(subcategory => <article className="list-card static" key={subcategory.id}><div className="row"><div><strong>{subcategory.name}</strong><small>{subcategory.productCount} məhsul · sıra {subcategory.sortOrder}</small></div><Status value={subcategory.isArchived ? 'Arxiv' : subcategory.isActive ? 'Aktiv' : 'Passiv'} tone={subcategory.isActive && !subcategory.isArchived ? 'success' : 'danger'} /></div><div className="card-actions"><button onClick={() => editSubcategory(subcategory)}>Dəyiş</button>{subcategory.isArchived ? <button onClick={() => execute(() => api.restoreSubcategory(subcategory.id))}>Arxivdən çıxar</button> : <button onClick={() => execute(() => api.setSubcategoryActive(subcategory.id, !subcategory.isActive))}>{subcategory.isActive ? 'Passiv et' : 'Aktiv et'}</button>}<button className="danger-button" onClick={() => removeSubcategory(subcategory)}>Sil / arxivlə</button></div></article>)}{selectedCategory && !categorySubcategories.length && <Empty text="Alt kateqoriya yoxdur" />}</div>

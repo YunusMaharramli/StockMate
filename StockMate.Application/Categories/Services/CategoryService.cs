@@ -269,6 +269,25 @@ public sealed class CategoryService : ICategoryService
                 category.Archive();
                 break;
 
+            case CategoryRemovalMode.DeleteProducts:
+                foreach (var product in products)
+                {
+                    if (await _productRepository.HasHistoricalReferencesAsync(
+                            product.Id,
+                            cancellationToken))
+                    {
+                        throw new InvalidOperationException(
+                            $"'{product.Name}' məhsulu sifariş və ya alış tarixçəsində istifadə olunub. Kateqoriyanı məhsulları ilə birlikdə arxivləyin.");
+                    }
+                }
+
+                foreach (var product in products)
+                    await _productRepository.PrepareDeleteAsync(product, cancellationToken);
+
+                _subcategoryRepository.RemoveRange(subcategories);
+                _categoryRepository.Remove(category);
+                break;
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(request));
         }

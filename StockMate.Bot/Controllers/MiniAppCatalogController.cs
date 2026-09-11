@@ -157,6 +157,16 @@ public class MiniAppCatalogController : ControllerBase
         return NoContent();
     }
 
+    [HttpDelete("products/{productId:guid}")]
+    public async Task<IActionResult> DeleteProduct(
+        Guid productId,
+        CancellationToken cancellationToken)
+    {
+        await RequireAdminAsync(cancellationToken);
+        await _productService.DeleteAsync(productId, cancellationToken);
+        return NoContent();
+    }
+
     [HttpPost("products/bulk")]
     public async Task<IActionResult> ApplyBulkProductAction(
         [FromBody] BulkProductActionRequest request,

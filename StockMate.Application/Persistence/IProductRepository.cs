@@ -59,6 +59,15 @@ public interface IProductRepository
     Task<IReadOnlyList<Product>> GetBySubcategoryAsync(
         Guid subcategoryId,
         CancellationToken cancellationToken = default);
+
+    Task<bool> HasHistoricalReferencesAsync(
+        Guid productId,
+        CancellationToken cancellationToken = default);
+
+    Task PrepareDeleteAsync(
+        Product product,
+        CancellationToken cancellationToken = default);
+
     void Update(Product product);
     Task<IReadOnlyList<Product>> GetAdminPageAsync(
     int pageNumber,

@@ -324,6 +324,24 @@ public sealed class SubcategoryService : ISubcategoryService
                 subcategory.Archive();
                 break;
 
+            case SubcategoryRemovalMode.DeleteProducts:
+                foreach (var product in products)
+                {
+                    if (await _productRepository.HasHistoricalReferencesAsync(
+                            product.Id,
+                            cancellationToken))
+                    {
+                        throw new InvalidOperationException(
+                            $"'{product.Name}' məhsulu sifariş və ya alış tarixçəsində istifadə olunub. Alt kateqoriyanı məhsulları ilə birlikdə arxivləyin.");
+                    }
+                }
+
+                foreach (var product in products)
+                    await _productRepository.PrepareDeleteAsync(product, cancellationToken);
+
+                _subcategoryRepository.Remove(subcategory);
+                break;
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(request));
         }

@@ -4,7 +4,8 @@ public enum SubcategoryRemovalMode
 {
     MoveProducts,
     ArchiveSubcategory,
-    ArchiveProducts
+    ArchiveProducts,
+    DeleteProducts
 }
 
 public sealed record RemoveSubcategoryRequest(

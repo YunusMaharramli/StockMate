@@ -77,6 +77,10 @@ public interface IProductService
         Guid productId,
         CancellationToken cancellationToken = default);
 
+    Task DeleteAsync(
+        Guid productId,
+        CancellationToken cancellationToken = default);
+
     Task ApplyBulkActionAsync(
         BulkProductActionRequest request,
         CancellationToken cancellationToken = default);
