@@ -178,10 +178,10 @@ public class OrderService : IOrderService
                     $"Product '{cartItem.ProductId}' was not found.");
             }
 
-            if (!product.IsActive)
+            if (!product.IsCatalogVisible)
             {
                 throw new InvalidOperationException(
-                    $"Product '{product.Name}' is inactive.");
+                    $"Product '{product.Name}' is no longer available in the catalog.");
             }
 
             var reservedQuantity =

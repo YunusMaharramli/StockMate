@@ -19,3 +19,17 @@ docker-compose*.yml
 
 StockMate.Domain.Tests/
 StockMate.MiniApp/
+
+**/node_modules
+**/node_modules/**
+**/.npm-cache
+**/.npm-cache/**
+**/*npm-cache*
+**/*npm-cache*/**
+
+**/bin
+**/bin/**
+**/obj
+**/obj/**
+**/dist
+**/dist/**

@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using StockMate.Application.Carts.Services;
+using StockMate.Application.Categories.Services;
 using StockMate.Application.Customers.Services;
 using StockMate.Application.DeliveryCompanies.Services;
 using StockMate.Application.Orders.Services;
@@ -10,6 +11,7 @@ using StockMate.Application.Shipments.Services;
 using StockMate.Application.Shortages.Services;
 using StockMate.Application.Staff.Services;
 using StockMate.Application.StockPurchases.Services;
+using StockMate.Application.Subcategories.Services;
 using StockMate.Application.TelegramInvites.Services;
 
 namespace StockMate.Application;
@@ -37,6 +39,8 @@ public static class DependencyInjection
         services.AddScoped<IStockPurchaseService,StockPurchaseService>();
         services.AddScoped<IInventoryReportService, InventoryReportService>();
         services.AddScoped<ITelegramInviteService, TelegramInviteService>();
+        services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<ISubcategoryService, SubcategoryService>();
         return services;
     }
 }

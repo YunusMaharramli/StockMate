@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
 using StockMate.Application.Carts.Models;
 using StockMate.Application.Carts.Services;
+using StockMate.Application.Categories.Services;
 using StockMate.Application.Customers.Models;
 using StockMate.Application.Customers.Services;
 using StockMate.Application.DeliveryCompanies.Services;
@@ -12,6 +13,7 @@ using StockMate.Application.Shipments.Models;
 using StockMate.Application.Shipments.Services;
 using StockMate.Application.Staff.Models;
 using StockMate.Application.Staff.Services;
+using StockMate.Application.Subcategories.Services;
 using StockMate.Application.TelegramInvites.Services;
 using StockMate.Bot.Options;
 using StockMate.Bot.Telegram.State;
@@ -32,6 +34,8 @@ public class TelegramUpdateHandler
     private readonly IDeliveryCompanyService _deliveryCompanyService;
     private readonly ILogger<TelegramUpdateHandler> _logger;
     private readonly IProductService _productService;
+    private readonly ICategoryService _categoryService;
+    private readonly ISubcategoryService _subcategoryService;
     private readonly ICartService _cartService;
     private readonly TelegramSessionStore _sessionStore;
     private readonly IOrderService _orderService;
@@ -47,6 +51,8 @@ public class TelegramUpdateHandler
     ICustomerAddressService customerAddressService,
     IDeliveryCompanyService deliveryCompanyService,
     IProductService productService,
+    ICategoryService categoryService,
+    ISubcategoryService subcategoryService,
     ICartService cartService,
     TelegramSessionStore sessionStore,
     IOrderService orderService,
@@ -62,6 +68,8 @@ public class TelegramUpdateHandler
         _customerAddressService = customerAddressService;
         _deliveryCompanyService = deliveryCompanyService;
         _productService = productService;
+        _categoryService = categoryService;
+        _subcategoryService = subcategoryService;
         _cartService = cartService;
         _logger = logger;
         _sessionStore = sessionStore;
@@ -173,6 +181,11 @@ public class TelegramUpdateHandler
 
         if (query.Data == "menu:products")
         {
+            var productSession = _sessionStore.GetOrCreate(telegramUserId);
+            productSession.ProductCategoryId = null;
+            productSession.ProductSubcategoryName = null;
+            productSession.ProductSearch = null;
+            productSession.ProductCatalogPage = 1;
             await SendProductsPageAsync(
                 telegramUserId,
                 chatId,
@@ -282,6 +295,94 @@ public class TelegramUpdateHandler
                     quantity);
             }
 
+            return;
+        }
+
+        if (query.Data == "products:back")
+        {
+            var productSession = _sessionStore.GetOrCreate(telegramUserId);
+            await SendProductsPageAsync(
+                telegramUserId,
+                chatId,
+                productSession.ProductCatalogPage);
+            return;
+        }
+
+        if (query.Data == "products:filter:category")
+        {
+            await SendCategoryFilterAsync(chatId);
+            return;
+        }
+
+        if (query.Data == "products:filter:subcategory")
+        {
+            await SendSubcategoryFilterAsync(chatId);
+            return;
+        }
+
+        if (query.Data == "products:search")
+        {
+            var productSession = _sessionStore.GetOrCreate(telegramUserId);
+            productSession.CustomerInputStep = CustomerInputStep.AwaitingProductSearch;
+
+            await _botClient.SendMessage(
+                chatId,
+                "Axtarmaq istədiyiniz məhsulun adını və ya kodunu yazın.");
+            return;
+        }
+
+        if (query.Data == "products:category:all")
+        {
+            var productSession = _sessionStore.GetOrCreate(telegramUserId);
+            productSession.ProductCategoryId = null;
+            await SendProductsPageAsync(telegramUserId, chatId, 1);
+            return;
+        }
+
+        if (query.Data.StartsWith("products:category:"))
+        {
+            var idText = query.Data["products:category:".Length..];
+            if (Guid.TryParse(idText, out var categoryId))
+            {
+                var productSession = _sessionStore.GetOrCreate(telegramUserId);
+                productSession.ProductCategoryId = categoryId;
+                await SendProductsPageAsync(telegramUserId, chatId, 1);
+            }
+            return;
+        }
+
+        if (query.Data == "products:subcategory:all")
+        {
+            var productSession = _sessionStore.GetOrCreate(telegramUserId);
+            productSession.ProductSubcategoryName = null;
+            await SendProductsPageAsync(telegramUserId, chatId, 1);
+            return;
+        }
+
+        if (query.Data.StartsWith("products:subcategory:"))
+        {
+            var idText = query.Data["products:subcategory:".Length..];
+            if (Guid.TryParse(idText, out var subcategoryId))
+            {
+                var subcategory = await _subcategoryService.GetByIdAsync(subcategoryId);
+                if (subcategory is not null && subcategory.IsActive && !subcategory.IsArchived)
+                {
+                    var productSession = _sessionStore.GetOrCreate(telegramUserId);
+                    productSession.ProductSubcategoryName = subcategory.Name;
+                    await SendProductsPageAsync(telegramUserId, chatId, 1);
+                }
+            }
+            return;
+        }
+
+        if (query.Data == "products:clear")
+        {
+            var productSession = _sessionStore.GetOrCreate(telegramUserId);
+            productSession.ProductCategoryId = null;
+            productSession.ProductSubcategoryName = null;
+            productSession.ProductSearch = null;
+            productSession.CustomerInputStep = CustomerInputStep.None;
+            await SendProductsPageAsync(telegramUserId, chatId, 1);
             return;
         }
 
@@ -1216,23 +1317,20 @@ public class TelegramUpdateHandler
         }
         if (query.Data == "admin:product:add")
         {
-            var session = _sessionStore.GetOrCreate(
-                telegramUserId);
+            if (string.IsNullOrWhiteSpace(_telegramOptions.MiniAppUrl))
+            {
+                await _botClient.SendMessage(
+                    chatId,
+                    "Mini App ünvanı konfiqurasiya edilməyib.");
 
-            session.AdminInputStep =
-                AdminInputStep.AwaitingProductName;
-
-            session.ProductId = null;
-            session.ProductName = null;
-            session.ProductCode = null;
-            session.ProductPrice = null;
-            session.InitialStockQuantity = null;
-            session.ProductDescription = null;
+                return;
+            }
 
             await _botClient.SendMessage(
                 chatId,
-                "Yeni məhsulun adını yazın.\n\n" +
-                "Ləğv etmək üçün /cancel yazın.");
+                "Yeni məhsulu kateqoriya və ölçü seçərək Mini App-dan əlavə edin.",
+                replyMarkup: BuildMiniAppKeyboard(
+                    "📱 Mini App-da məhsul yarat"));
 
             return;
         }
@@ -1497,19 +1595,23 @@ public class TelegramUpdateHandler
             ?? throw new KeyNotFoundException(
                 "Customer was not found.");
 
-        var result = await _productService.GetActivePageAsync(
+        var productSession = _sessionStore.GetOrCreate(telegramUserId);
+        var query = new ProductCatalogQuery(
             pageNumber,
-            customer.ProductPageSize);
+            customer.ProductPageSize,
+            productSession.ProductCategoryId,
+            productSession.ProductSubcategoryName,
+            productSession.ProductSearch);
+
+        var result = await _productService.GetCatalogPageAsync(query);
+        productSession.ProductCatalogPage = Math.Max(1, Math.Min(pageNumber, Math.Max(1, result.TotalPages)));
 
         if (result.Items.Count == 0)
         {
             await _botClient.SendMessage(
                 chatId,
-                "Hazırda aktiv məhsul yoxdur.",
-                replyMarkup: new InlineKeyboardMarkup(
-                    InlineKeyboardButton.WithCallbackData(
-                        "🏠 Ana menyu",
-                        "menu:main")));
+                "Seçilmiş filterlərə uyğun məhsul tapılmadı.",
+                replyMarkup: BuildProductFilterKeyboard());
 
             return;
         }
@@ -1518,6 +1620,20 @@ public class TelegramUpdateHandler
 
         text.AppendLine(
             $"🛍 Məhsullar — səhifə {result.PageNumber}/{result.TotalPages}");
+
+        if (productSession.ProductCategoryId.HasValue)
+        {
+            var selectedCategory = await _categoryService.GetByIdAsync(
+                productSession.ProductCategoryId.Value);
+            if (selectedCategory is not null)
+                text.AppendLine($"Kateqoriya: {selectedCategory.Name}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(productSession.ProductSubcategoryName))
+            text.AppendLine($"Ölçü: {productSession.ProductSubcategoryName}");
+
+        if (!string.IsNullOrWhiteSpace(productSession.ProductSearch))
+            text.AppendLine($"Axtarış: {productSession.ProductSearch}");
 
         text.AppendLine();
 
@@ -1533,6 +1649,35 @@ public class TelegramUpdateHandler
         }
 
         var rows = new List<InlineKeyboardButton[]>();
+
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData(
+                "🏷 Kateqoriya",
+                "products:filter:category"),
+            InlineKeyboardButton.WithCallbackData(
+                "📐 Ölçü",
+                "products:filter:subcategory")
+        ]);
+
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData(
+                "🔎 Məhsul axtar",
+                "products:search")
+        ]);
+
+        if (productSession.ProductCategoryId.HasValue ||
+            !string.IsNullOrWhiteSpace(productSession.ProductSubcategoryName) ||
+            !string.IsNullOrWhiteSpace(productSession.ProductSearch))
+        {
+            rows.Add(
+            [
+                InlineKeyboardButton.WithCallbackData(
+                    "🧹 Filterləri təmizlə",
+                    "products:clear")
+            ]);
+        }
 
         rows.AddRange(
             result.Items
@@ -1563,6 +1708,19 @@ public class TelegramUpdateHandler
 
         if (navigationRow.Count > 0)
             rows.Add(navigationRow.ToArray());
+
+        if (result.TotalPages > 1)
+        {
+            var firstPage = Math.Max(1, result.PageNumber - 2);
+            var lastPage = Math.Min(result.TotalPages, firstPage + 4);
+            firstPage = Math.Max(1, lastPage - 4);
+
+            rows.Add(Enumerable.Range(firstPage, lastPage - firstPage + 1)
+                .Select(page => InlineKeyboardButton.WithCallbackData(
+                    page == result.PageNumber ? $"· {page} ·" : page.ToString(),
+                    $"products:page:{page}"))
+                .ToArray());
+        }
 
         rows.Add(
         [
@@ -1737,6 +1895,9 @@ public class TelegramUpdateHandler
             ?? throw new KeyNotFoundException(
                 "Product was not found.");
 
+        if (!product.IsCatalogVisible)
+            throw new InvalidOperationException("Product is no longer available in the catalog.");
+
         var text = BuildProductDetailText(product, quantity);
         var keyboard = BuildProductKeyboard(product, quantity);
 
@@ -1765,6 +1926,9 @@ public class TelegramUpdateHandler
         var product = await _productService.GetByIdAsync(productId)
             ?? throw new KeyNotFoundException(
                 "Product was not found.");
+
+        if (!product.IsCatalogVisible)
+            throw new InvalidOperationException("Product is no longer available in the catalog.");
 
         var text = BuildProductDetailText(product, quantity);
         var keyboard = BuildProductKeyboard(product, quantity);
@@ -1800,6 +1964,10 @@ public class TelegramUpdateHandler
         text.AppendLine($"📦 {product.Name}");
         text.AppendLine();
         text.AppendLine($"Kod: {product.Code}");
+        if (!string.IsNullOrWhiteSpace(product.CategoryName))
+            text.AppendLine($"Kateqoriya: {product.CategoryName}");
+        if (!string.IsNullOrWhiteSpace(product.SubcategoryName))
+            text.AppendLine($"Ölçü: {product.SubcategoryName}");
         text.AppendLine($"Qiymət: {product.Price:0.00} AZN");
         text.AppendLine($"Miqdar: {quantity}");
         text.AppendLine($"Cəmi: {product.Price * quantity:0.00} AZN");
@@ -1843,7 +2011,7 @@ public class TelegramUpdateHandler
         [
             InlineKeyboardButton.WithCallbackData(
             "⬅️ Məhsullara qayıt",
-            "menu:products")
+            "products:back")
         ]);
 
         rows.Add(
@@ -1933,6 +2101,33 @@ public class TelegramUpdateHandler
             var productId = session.CustomerProductId.Value;
             _sessionStore.Clear(telegramUserId);
             await SendProductDetailAsync(message.Chat.Id, productId, quantity);
+            return true;
+        }
+
+        if (session.CustomerInputStep == CustomerInputStep.AwaitingProductSearch)
+        {
+            var search = message.Text?.Trim();
+
+            if (string.IsNullOrWhiteSpace(search) || search.Length < 2)
+            {
+                await _botClient.SendMessage(
+                    message.Chat.Id,
+                    "Axtarış üçün ən azı 2 simvol yazın.");
+                return true;
+            }
+
+            if (search.Length > 100)
+            {
+                await _botClient.SendMessage(
+                    message.Chat.Id,
+                    "Axtarış mətni 100 simvoldan uzun ola bilməz.");
+                return true;
+            }
+
+            session.ProductSearch = search;
+            session.ProductCatalogPage = 1;
+            session.CustomerInputStep = CustomerInputStep.None;
+            await SendProductsPageAsync(telegramUserId, message.Chat.Id, 1);
             return true;
         }
 
@@ -2221,6 +2416,106 @@ public class TelegramUpdateHandler
         await _botClient.SendMessage(
             chatId,
             "Sifariş üçün çatdırılma ünvanını seçin:",
+            replyMarkup: new InlineKeyboardMarkup(rows));
+    }
+
+    private InlineKeyboardMarkup BuildProductFilterKeyboard()
+    {
+        return new InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton.WithCallbackData(
+                    "🏷 Kateqoriya",
+                    "products:filter:category"),
+                InlineKeyboardButton.WithCallbackData(
+                    "📐 Ölçü",
+                    "products:filter:subcategory")
+            ],
+            [
+                InlineKeyboardButton.WithCallbackData(
+                    "🔎 Məhsul axtar",
+                    "products:search")
+            ],
+            [
+                InlineKeyboardButton.WithCallbackData(
+                    "🧹 Filterləri təmizlə",
+                    "products:clear")
+            ],
+            [
+                InlineKeyboardButton.WithCallbackData(
+                    "🏠 Ana menyu",
+                    "menu:main")
+            ]
+        ]);
+    }
+
+    private async Task SendCategoryFilterAsync(long chatId)
+    {
+        var categories = await _categoryService.GetActiveAsync();
+        var rows = categories
+            .Select(category => new[]
+            {
+                InlineKeyboardButton.WithCallbackData(
+                    category.Name,
+                    $"products:category:{category.Id}")
+            })
+            .ToList();
+
+        rows.Insert(0,
+        [
+            InlineKeyboardButton.WithCallbackData(
+                "Hamısı",
+                "products:category:all")
+        ]);
+
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData(
+                "⬅️ Məhsullara qayıt",
+                "products:back")
+        ]);
+
+        await _botClient.SendMessage(
+            chatId,
+            "Kateqoriya seçin:",
+            replyMarkup: new InlineKeyboardMarkup(rows));
+    }
+
+    private async Task SendSubcategoryFilterAsync(long chatId)
+    {
+        var subcategories = await _subcategoryService.GetActiveAsync();
+        var uniqueSubcategories = subcategories
+            .GroupBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(item => item.Name)
+            .ToList();
+
+        var rows = uniqueSubcategories
+            .Select(subcategory => new[]
+            {
+                InlineKeyboardButton.WithCallbackData(
+                    subcategory.Name,
+                    $"products:subcategory:{subcategory.Id}")
+            })
+            .ToList();
+
+        rows.Insert(0,
+        [
+            InlineKeyboardButton.WithCallbackData(
+                "Hamısı",
+                "products:subcategory:all")
+        ]);
+
+        rows.Add(
+        [
+            InlineKeyboardButton.WithCallbackData(
+                "⬅️ Məhsullara qayıt",
+                "products:back")
+        ]);
+
+        await _botClient.SendMessage(
+            chatId,
+            "Ölçü seçin. Seçim bütün kateqoriyalara tətbiq olunacaq:",
             replyMarkup: new InlineKeyboardMarkup(rows));
     }
 
@@ -3147,7 +3442,7 @@ public class TelegramUpdateHandler
                 "Məhsul yoxdur.",
                 replyMarkup: new InlineKeyboardMarkup(
                     InlineKeyboardButton.WithCallbackData(
-                        "➕ Yeni məhsul",
+                        "📱 Mini App-da məhsul yarat",
                         "admin:product:add")));
 
             return;
@@ -3207,7 +3502,7 @@ public class TelegramUpdateHandler
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-            "➕ Yeni məhsul",
+            "📱 Mini App-da məhsul yarat",
             "admin:product:add"),
 
         InlineKeyboardButton.WithCallbackData(
@@ -3597,177 +3892,6 @@ public class TelegramUpdateHandler
             _sessionStore.Clear(telegramUserId);
             await _botClient.SendMessage(message.Chat.Id, "✅ İşçi əlavə edildi.");
             await SendAdminStaffDetailAsync(message.Chat.Id, worker.Id);
-            return true;
-        }
-
-        if (session.AdminInputStep ==
-    AdminInputStep.AwaitingProductName)
-        {
-            if (string.IsNullOrWhiteSpace(message.Text))
-            {
-                await _botClient.SendMessage(
-                    message.Chat.Id,
-                    "Məhsul adı boş ola bilməz.");
-
-                return true;
-            }
-
-            session.ProductName = message.Text.Trim();
-            session.AdminInputStep =
-                AdminInputStep.AwaitingProductCode;
-
-            await _botClient.SendMessage(
-                message.Chat.Id,
-                "Məhsul kodunu yazın.\nMəsələn: CC-1L");
-
-            return true;
-        }
-
-        if (session.AdminInputStep ==
-            AdminInputStep.AwaitingProductCode)
-        {
-            if (string.IsNullOrWhiteSpace(message.Text))
-            {
-                await _botClient.SendMessage(
-                    message.Chat.Id,
-                    "Məhsul kodu boş ola bilməz.");
-
-                return true;
-            }
-
-            session.ProductCode = message.Text.Trim();
-            session.AdminInputStep =
-                AdminInputStep.AwaitingProductPrice;
-
-            await _botClient.SendMessage(
-                message.Chat.Id,
-                "Məhsulun qiymətini yazın.\nMəsələn: 1.80");
-
-            return true;
-        }
-
-        if (session.AdminInputStep ==
-            AdminInputStep.AwaitingProductPrice)
-        {
-            var priceText = message.Text?
-                .Trim()
-                .Replace(',', '.');
-
-            if (!decimal.TryParse(
-                    priceText,
-                    System.Globalization.NumberStyles.Number,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out var productPrice) ||
-                productPrice < 0)
-            {
-                await _botClient.SendMessage(
-                    message.Chat.Id,
-                    "Qiyməti düzgün formatda yazın.");
-
-                return true;
-            }
-
-            session.ProductPrice = productPrice;
-            session.AdminInputStep =
-                AdminInputStep.AwaitingInitialStock;
-
-            await _botClient.SendMessage(
-                message.Chat.Id,
-                "İlkin stok sayını yazın:");
-
-            return true;
-        }
-
-        if (session.AdminInputStep ==
-            AdminInputStep.AwaitingInitialStock)
-        {
-            if (!int.TryParse(
-                    message.Text,
-                    out var initialStock) ||
-                initialStock < 0)
-            {
-                await _botClient.SendMessage(
-                    message.Chat.Id,
-                    "Stok sıfır və ya müsbət tam ədəd olmalıdır.");
-
-                return true;
-            }
-
-            session.InitialStockQuantity = initialStock;
-            session.AdminInputStep =
-                AdminInputStep.AwaitingProductDescription;
-
-            await _botClient.SendMessage(
-                message.Chat.Id,
-                "Məhsulun açıqlamasını yazın:");
-
-            return true;
-        }
-
-        if (session.AdminInputStep ==
-            AdminInputStep.AwaitingProductDescription)
-        {
-            if (string.IsNullOrWhiteSpace(message.Text))
-            {
-                await _botClient.SendMessage(
-                    message.Chat.Id,
-                    "Açıqlama boş ola bilməz.");
-
-                return true;
-            }
-
-            session.ProductDescription = message.Text.Trim();
-            session.AdminInputStep =
-                AdminInputStep.AwaitingProductImage;
-
-            await _botClient.SendMessage(
-                message.Chat.Id,
-                "Məhsulun şəklini göndərin və ya " +
-                "“Şəkilsiz davam et” yazın.");
-
-            return true;
-        }
-
-        if (session.AdminInputStep ==
-            AdminInputStep.AwaitingProductImage)
-        {
-            string? imageReference = null;
-
-            if (message.Photo is { Length: > 0 })
-            {
-                imageReference = message.Photo[^1].FileId;
-            }
-            else if (message.Text?.Equals(
-                         "Şəkilsiz davam et",
-                         StringComparison.OrdinalIgnoreCase) != true)
-            {
-                await _botClient.SendMessage(
-                    message.Chat.Id,
-                    "Şəkil göndərin və ya “Şəkilsiz davam et” yazın.");
-
-                return true;
-            }
-
-            var product =
-                await _productService.CreateAsync(
-                    new CreateProductRequest(
-                        session.ProductName!,
-                        session.ProductCode!,
-                        session.ProductPrice!.Value,
-                        session.InitialStockQuantity!.Value,
-                        session.ProductDescription!,
-                        imageReference));
-
-            _sessionStore.Clear(telegramUserId);
-
-            await _botClient.SendMessage(
-                message.Chat.Id,
-                "✅ Yeni məhsul əlavə edildi.");
-
-            await SendAdminProductDetailAsync(
-                message.Chat.Id,
-                product.Id);
-
             return true;
         }
 

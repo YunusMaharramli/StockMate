@@ -49,11 +49,18 @@ public class ProductsController : ControllerBase
     public async Task<ActionResult<PagedResult<ProductDto>>> GetActivePage(
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 5,
+        [FromQuery] Guid? categoryId = null,
+        [FromQuery] string? subcategoryName = null,
+        [FromQuery] string? search = null,
         CancellationToken cancellationToken = default)
     {
-        var result = await _productService.GetActivePageAsync(
-            pageNumber,
-            pageSize,
+        var result = await _productService.GetCatalogPageAsync(
+            new ProductCatalogQuery(
+                pageNumber,
+                pageSize,
+                categoryId,
+                subcategoryName,
+                search),
             cancellationToken);
 
         return Ok(result);

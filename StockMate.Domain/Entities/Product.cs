@@ -14,7 +14,10 @@ public class Product
         decimal price,
         int stockQuantity,
         string description,
-        string? imageReference = null)
+        string? imageReference = null,
+        Guid? categoryId = null,
+        Guid? subcategoryId = null,
+        int minimumStockQuantity = 0)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Product name is required.", nameof(name));
@@ -31,6 +34,14 @@ public class Product
         if (string.IsNullOrWhiteSpace(description))
             throw new ArgumentException("Description is required.", nameof(description));
 
+        if (minimumStockQuantity < 0)
+            throw new ArgumentOutOfRangeException(nameof(minimumStockQuantity));
+
+        if (subcategoryId.HasValue && !categoryId.HasValue)
+            throw new ArgumentException(
+                "A subcategory cannot be assigned without a category.",
+                nameof(subcategoryId));
+
         Id = Guid.NewGuid();
         Name = name.Trim();
         Code = code.Trim().ToUpperInvariant();
@@ -38,7 +49,11 @@ public class Product
         StockQuantity = stockQuantity;
         Description = description.Trim();
         ImageReference = imageReference;
+        CategoryId = categoryId;
+        SubcategoryId = subcategoryId;
+        MinimumStockQuantity = minimumStockQuantity;
         IsActive = true;
+        IsArchived = false;
         CreatedAtUtc = DateTime.UtcNow;
     }
 
@@ -56,7 +71,25 @@ public class Product
 
     public string? ImageReference { get; private set; }
 
+    public Guid? CategoryId { get; private set; }
+
+    public Category? Category { get; private set; }
+
+    public Guid? SubcategoryId { get; private set; }
+
+    public Subcategory? Subcategory { get; private set; }
+
+    public int MinimumStockQuantity { get; private set; }
+
     public bool IsActive { get; private set; }
+
+    public bool IsArchived { get; private set; }
+
+    public bool IsCatalogVisible =>
+        IsActive &&
+        !IsArchived &&
+        (Category is null || (Category.IsActive && !Category.IsArchived)) &&
+        (Subcategory is null || (Subcategory.IsActive && !Subcategory.IsArchived));
 
     public DateTime CreatedAtUtc { get; private set; }
 
@@ -85,6 +118,39 @@ public class Product
             throw new ArgumentOutOfRangeException(nameof(newPrice));
 
         Price = newPrice;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public void ChangeClassification(
+        Guid categoryId,
+        Guid? subcategoryId)
+    {
+        if (categoryId == Guid.Empty)
+            throw new ArgumentException("Category ID is required.", nameof(categoryId));
+
+        CategoryId = categoryId;
+        SubcategoryId = subcategoryId;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public void SetMinimumStockQuantity(int quantity)
+    {
+        if (quantity < 0)
+            throw new ArgumentOutOfRangeException(nameof(quantity));
+
+        MinimumStockQuantity = quantity;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public void Archive()
+    {
+        IsArchived = true;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public void Restore()
+    {
+        IsArchived = false;
         UpdatedAtUtc = DateTime.UtcNow;
     }
 

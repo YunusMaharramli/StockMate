@@ -6,4 +6,7 @@ public sealed record CreateProductRequest(
     decimal Price,
     int InitialStockQuantity,
     string Description,
-    string? ImageReference);
+    string? ImageReference,
+    Guid? CategoryId = null,
+    Guid? SubcategoryId = null,
+    int MinimumStockQuantity = 0);

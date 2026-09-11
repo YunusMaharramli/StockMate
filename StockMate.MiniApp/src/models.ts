@@ -71,6 +71,35 @@ export interface Product {
   description: string;
   imageReference?: string;
   isActive: boolean;
+  isArchived: boolean;
+  categoryId?: string;
+  categoryName?: string;
+  subcategoryId?: string;
+  subcategoryName?: string;
+  minimumStockQuantity: number;
+  isLowStock: boolean;
+  isCatalogVisible: boolean;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  isActive: boolean;
+  isArchived: boolean;
+  sortOrder: number;
+  subcategoryCount: number;
+  productCount: number;
+}
+
+export interface Subcategory {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  name: string;
+  isActive: boolean;
+  isArchived: boolean;
+  sortOrder: number;
+  productCount: number;
 }
 
 export interface ProductInput {
@@ -80,6 +109,9 @@ export interface ProductInput {
   initialStockQuantity: number;
   description: string;
   imageReference?: string;
+  categoryId: string;
+  subcategoryId?: string;
+  minimumStockQuantity: number;
 }
 
 export interface StockMovement {

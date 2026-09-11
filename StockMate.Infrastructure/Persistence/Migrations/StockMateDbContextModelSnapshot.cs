@@ -76,6 +76,47 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                     b.ToTable("CartItems", (string)null);
                 });
 
+            modelBuilder.Entity("StockMate.Domain.Entities.Category", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.HasIndex("IsArchived", "IsActive", "SortOrder");
+
+                    b.ToTable("Categories", (string)null);
+                });
+
             modelBuilder.Entity("StockMate.Domain.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -460,6 +501,9 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -480,6 +524,16 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsArchived")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("MinimumStockQuantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -493,6 +547,9 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("SubcategoryId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -504,6 +561,8 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                     b.HasIndex("IsActive");
 
                     b.HasIndex("Name");
+
+                    b.HasIndex("CategoryId", "SubcategoryId", "IsArchived", "IsActive");
 
                     b.ToTable("Products", (string)null);
                 });
@@ -772,6 +831,50 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                     b.ToTable("StockPurchaseItems", (string)null);
                 });
 
+            modelBuilder.Entity("StockMate.Domain.Entities.Subcategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId", "NormalizedName")
+                        .IsUnique();
+
+                    b.HasIndex("CategoryId", "IsArchived", "IsActive", "SortOrder");
+
+                    b.ToTable("Subcategories", (string)null);
+                });
+
             modelBuilder.Entity("StockMate.Domain.Entities.TelegramInvite", b =>
                 {
                     b.Property<Guid>("Id")
@@ -919,6 +1022,24 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("StockMate.Domain.Entities.Product", b =>
+                {
+                    b.HasOne("StockMate.Domain.Entities.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("StockMate.Domain.Entities.Subcategory", "Subcategory")
+                        .WithMany()
+                        .HasForeignKey("CategoryId", "SubcategoryId")
+                        .HasPrincipalKey("CategoryId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Subcategory");
+                });
+
             modelBuilder.Entity("StockMate.Domain.Entities.SaleRecord", b =>
                 {
                     b.HasOne("StockMate.Domain.Entities.DeliveryCompany", null)
@@ -1000,6 +1121,15 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                         .WithMany("Items")
                         .HasForeignKey("StockPurchaseId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("StockMate.Domain.Entities.Subcategory", b =>
+                {
+                    b.HasOne("StockMate.Domain.Entities.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

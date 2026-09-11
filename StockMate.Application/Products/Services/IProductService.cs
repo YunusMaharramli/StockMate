@@ -17,6 +17,10 @@ public interface IProductService
         int pageSize,
         CancellationToken cancellationToken = default);
 
+    Task<PagedResult<ProductDto>> GetCatalogPageAsync(
+        ProductCatalogQuery query,
+        CancellationToken cancellationToken = default);
+
     Task ChangePriceAsync(
         Guid productId,
         decimal newPrice,
@@ -60,4 +64,20 @@ public interface IProductService
     int pageSize,
     string? search,
     CancellationToken cancellationToken = default);
+
+    Task<PagedResult<ProductDto>> GetAdminPageAsync(
+        AdminProductQuery query,
+        CancellationToken cancellationToken = default);
+
+    Task ArchiveAsync(
+        Guid productId,
+        CancellationToken cancellationToken = default);
+
+    Task RestoreAsync(
+        Guid productId,
+        CancellationToken cancellationToken = default);
+
+    Task ApplyBulkActionAsync(
+        BulkProductActionRequest request,
+        CancellationToken cancellationToken = default);
 }

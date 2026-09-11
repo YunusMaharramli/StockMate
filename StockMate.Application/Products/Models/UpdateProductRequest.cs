@@ -3,4 +3,8 @@
 public sealed record UpdateProductRequest(
     string Name,
     string Description,
-    string? ImageReference);
+    string? ImageReference,
+    Guid? CategoryId = null,
+    Guid? SubcategoryId = null,
+    int? MinimumStockQuantity = null,
+    bool UpdateClassification = false);

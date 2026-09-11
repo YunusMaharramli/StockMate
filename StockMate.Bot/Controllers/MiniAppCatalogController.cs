@@ -31,11 +31,27 @@ public class MiniAppCatalogController : ControllerBase
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
+        [FromQuery] Guid? categoryId = null,
+        [FromQuery] Guid? subcategoryId = null,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] bool? inStock = null,
+        [FromQuery] bool? lowStock = null,
+        [FromQuery] bool includeArchived = false,
         CancellationToken cancellationToken = default)
     {
         await RequireAdminAsync(cancellationToken);
         return Ok(await _productService.GetAdminPageAsync(
-            pageNumber, pageSize, search, cancellationToken));
+            new AdminProductQuery(
+                pageNumber,
+                pageSize,
+                search,
+                categoryId,
+                subcategoryId,
+                isActive,
+                inStock,
+                lowStock,
+                includeArchived),
+            cancellationToken));
     }
 
     [HttpPost("products")]
@@ -44,6 +60,10 @@ public class MiniAppCatalogController : ControllerBase
         CancellationToken cancellationToken)
     {
         await RequireAdminAsync(cancellationToken);
+
+        if (!request.CategoryId.HasValue)
+            throw new ArgumentException("Category ID is required.", nameof(request));
+
         var product = await _productService.CreateAsync(request, cancellationToken);
         return Created($"api/miniapp/admin/products/{product.Id}", product);
     }
@@ -115,6 +135,36 @@ public class MiniAppCatalogController : ControllerBase
     {
         await RequireAdminAsync(cancellationToken);
         return Ok(await _productService.GetStockHistoryAsync(productId, cancellationToken));
+    }
+
+    [HttpPost("products/{productId:guid}/archive")]
+    public async Task<IActionResult> ArchiveProduct(
+        Guid productId,
+        CancellationToken cancellationToken)
+    {
+        await RequireAdminAsync(cancellationToken);
+        await _productService.ArchiveAsync(productId, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("products/{productId:guid}/restore")]
+    public async Task<IActionResult> RestoreProduct(
+        Guid productId,
+        CancellationToken cancellationToken)
+    {
+        await RequireAdminAsync(cancellationToken);
+        await _productService.RestoreAsync(productId, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("products/bulk")]
+    public async Task<IActionResult> ApplyBulkProductAction(
+        [FromBody] BulkProductActionRequest request,
+        CancellationToken cancellationToken)
+    {
+        await RequireAdminAsync(cancellationToken);
+        await _productService.ApplyBulkActionAsync(request, cancellationToken);
+        return NoContent();
     }
 
     [HttpGet("customers")]

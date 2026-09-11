@@ -10,16 +10,31 @@ public class ProductService : IProductService
     private static readonly int[] AllowedPageSizes = [5, 10, 20];
 
     private readonly IProductRepository _productRepository;
+    private readonly ICategoryRepository? _categoryRepository;
+    private readonly ISubcategoryRepository? _subcategoryRepository;
 
-    public ProductService(IProductRepository productRepository)
+    public ProductService(
+        IProductRepository productRepository,
+        ICategoryRepository? categoryRepository = null,
+        ISubcategoryRepository? subcategoryRepository = null)
     {
         _productRepository = productRepository;
+        _categoryRepository = categoryRepository;
+        _subcategoryRepository = subcategoryRepository;
     }
 
     public async Task<ProductDto> CreateAsync(
         CreateProductRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (request.CategoryId.HasValue)
+        {
+            await ValidateClassificationAsync(
+                request.CategoryId.Value,
+                request.SubcategoryId,
+                cancellationToken);
+        }
+
         if (await _productRepository.CodeExistsAsync(
                 request.Code,
                 cancellationToken))
@@ -34,7 +49,10 @@ public class ProductService : IProductService
             request.Price,
             request.InitialStockQuantity,
             request.Description,
-            request.ImageReference);
+            request.ImageReference,
+            request.CategoryId,
+            request.SubcategoryId,
+            request.MinimumStockQuantity);
 
         var initialMovement = new StockMovement(
             product.Id,
@@ -53,7 +71,11 @@ public class ProductService : IProductService
 
         await _productRepository.SaveChangesAsync(cancellationToken);
 
-        return MapProduct(product);
+        var savedProduct = await _productRepository.GetByIdAsync(
+            product.Id,
+            cancellationToken);
+
+        return MapProduct(savedProduct ?? product);
     }
 
     public async Task<ProductDto?> GetByIdAsync(
@@ -96,6 +118,27 @@ public class ProductService : IProductService
             products.Select(MapProduct).ToList(),
             pageNumber,
             pageSize,
+            totalItems);
+    }
+
+    public async Task<PagedResult<ProductDto>> GetCatalogPageAsync(
+        ProductCatalogQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ValidatePage(query.PageNumber, query.PageSize);
+
+        var products = await _productRepository.GetCatalogPageAsync(
+            query,
+            cancellationToken);
+
+        var totalItems = await _productRepository.CountCatalogAsync(
+            query,
+            cancellationToken);
+
+        return new PagedResult<ProductDto>(
+            products.Select(MapProduct).ToList(),
+            query.PageNumber,
+            query.PageSize,
             totalItems);
     }
 
@@ -241,7 +284,15 @@ public class ProductService : IProductService
             product.StockQuantity,
             product.Description,
             product.ImageReference,
-            product.IsActive);
+            product.IsActive,
+            product.IsArchived,
+            product.CategoryId,
+            product.Category?.Name,
+            product.SubcategoryId,
+            product.Subcategory?.Name,
+            product.MinimumStockQuantity,
+            product.StockQuantity <= product.MinimumStockQuantity,
+            product.IsCatalogVisible);
     }
 
     public async Task UpdateDetailsAsync(
@@ -257,6 +308,24 @@ public class ProductService : IProductService
             request.Name,
             request.Description,
             request.ImageReference);
+
+        if (request.UpdateClassification)
+        {
+            if (!request.CategoryId.HasValue)
+                throw new ArgumentException("Category ID is required.", nameof(request));
+
+            await ValidateClassificationAsync(
+                request.CategoryId.Value,
+                request.SubcategoryId,
+                cancellationToken);
+
+            product.ChangeClassification(
+                request.CategoryId.Value,
+                request.SubcategoryId);
+        }
+
+        if (request.MinimumStockQuantity.HasValue)
+            product.SetMinimumStockQuantity(request.MinimumStockQuantity.Value);
 
         await _productRepository.SaveChangesAsync(cancellationToken);
     }
@@ -293,5 +362,145 @@ public class ProductService : IProductService
             pageNumber,
             pageSize,
             totalItems);
+    }
+
+    public async Task<PagedResult<ProductDto>> GetAdminPageAsync(
+        AdminProductQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ValidatePage(query.PageNumber, query.PageSize);
+
+        var products = await _productRepository.GetAdminPageAsync(
+            query,
+            cancellationToken);
+
+        var totalItems = await _productRepository.CountAdminProductsAsync(
+            query,
+            cancellationToken);
+
+        return new PagedResult<ProductDto>(
+            products.Select(MapProduct).ToList(),
+            query.PageNumber,
+            query.PageSize,
+            totalItems);
+    }
+
+    public async Task ArchiveAsync(
+        Guid productId,
+        CancellationToken cancellationToken = default)
+    {
+        var product = await GetRequiredProductAsync(productId, cancellationToken);
+        product.Archive();
+        await _productRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RestoreAsync(
+        Guid productId,
+        CancellationToken cancellationToken = default)
+    {
+        var product = await GetRequiredProductAsync(productId, cancellationToken);
+        product.Restore();
+        await _productRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ApplyBulkActionAsync(
+        BulkProductActionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var ids = request.ProductIds
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToArray();
+
+        if (ids.Length == 0)
+            throw new ArgumentException("At least one product must be selected.", nameof(request));
+
+        if (ids.Length > 500)
+            throw new ArgumentException("No more than 500 products can be changed at once.", nameof(request));
+
+        if (request.Action == BulkProductAction.Move)
+        {
+            if (!request.CategoryId.HasValue)
+                throw new ArgumentException("A target category is required.", nameof(request));
+
+            await ValidateClassificationAsync(
+                request.CategoryId.Value,
+                request.SubcategoryId,
+                cancellationToken);
+        }
+
+        var products = await _productRepository.GetByIdsAsync(ids, cancellationToken);
+        if (products.Count != ids.Length)
+            throw new KeyNotFoundException("One or more selected products were not found.");
+
+        foreach (var product in products)
+        {
+            switch (request.Action)
+            {
+                case BulkProductAction.Activate:
+                    product.Activate();
+                    break;
+                case BulkProductAction.Deactivate:
+                    product.Deactivate();
+                    break;
+                case BulkProductAction.Archive:
+                    product.Archive();
+                    break;
+                case BulkProductAction.Restore:
+                    product.Restore();
+                    break;
+                case BulkProductAction.Move:
+                    product.ChangeClassification(
+                        request.CategoryId!.Value,
+                        request.SubcategoryId);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(request));
+            }
+        }
+
+        await _productRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task ValidateClassificationAsync(
+        Guid categoryId,
+        Guid? subcategoryId,
+        CancellationToken cancellationToken)
+    {
+        if (_categoryRepository is null || _subcategoryRepository is null)
+            throw new InvalidOperationException("Catalog repositories are not configured.");
+
+        var category = await _categoryRepository.GetByIdAsync(categoryId, cancellationToken)
+            ?? throw new KeyNotFoundException("Category was not found.");
+
+        if (category.IsArchived)
+            throw new InvalidOperationException("An archived category cannot be assigned to a product.");
+
+        if (!subcategoryId.HasValue)
+            return;
+
+        var subcategory = await _subcategoryRepository.GetByIdAsync(
+            subcategoryId.Value,
+            cancellationToken)
+            ?? throw new KeyNotFoundException("Subcategory was not found.");
+
+        if (subcategory.CategoryId != categoryId)
+            throw new InvalidOperationException("The subcategory does not belong to the selected category.");
+
+        if (subcategory.IsArchived)
+            throw new InvalidOperationException("An archived subcategory cannot be assigned to a product.");
+    }
+
+    private static void ValidatePage(int pageNumber, int pageSize)
+    {
+        if (pageNumber <= 0)
+            throw new ArgumentOutOfRangeException(nameof(pageNumber));
+
+        if (!AllowedPageSizes.Contains(pageSize))
+            throw new ArgumentOutOfRangeException(
+                nameof(pageSize),
+                "Page size must be 5, 10 or 20.");
     }
 }

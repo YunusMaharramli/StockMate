@@ -51,9 +51,9 @@ public class CartService : ICartService
                       ?? throw new KeyNotFoundException(
                           $"Product '{request.ProductId}' was not found.");
 
-        if (!product.IsActive)
+        if (!product.IsCatalogVisible)
             throw new InvalidOperationException(
-                "Inactive product cannot be added to the cart.");
+                "The product is not currently available in the catalog.");
 
         if (request.FulfillmentMode ==
                 CartItemFulfillmentMode.StockOnly &&

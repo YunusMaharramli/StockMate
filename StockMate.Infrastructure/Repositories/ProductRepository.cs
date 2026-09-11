@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using StockMate.Application.Persistence;
+using StockMate.Application.Products.Models;
 using StockMate.Domain.Entities;
 using StockMate.Infrastructure.Persistence;
 
@@ -19,6 +20,8 @@ public class ProductRepository : IProductRepository
         CancellationToken cancellationToken = default)
     {
         return _dbContext.Products
+            .Include(product => product.Category)
+            .Include(product => product.Subcategory)
             .FirstOrDefaultAsync(
                 product => product.Id == id,
                 cancellationToken);
@@ -54,7 +57,15 @@ public class ProductRepository : IProductRepository
     {
         return await _dbContext.Products
             .AsNoTracking()
-            .Where(product => product.IsActive)
+            .Include(product => product.Category)
+            .Include(product => product.Subcategory)
+            .Where(product =>
+                product.IsActive &&
+                !product.IsArchived &&
+                (product.CategoryId == null ||
+                 (product.Category!.IsActive && !product.Category.IsArchived)) &&
+                (product.SubcategoryId == null ||
+                 (product.Subcategory!.IsActive && !product.Subcategory.IsArchived)))
             .OrderBy(product => product.Name)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
@@ -65,8 +76,32 @@ public class ProductRepository : IProductRepository
         CancellationToken cancellationToken = default)
     {
         return _dbContext.Products.CountAsync(
-            product => product.IsActive,
+            product =>
+                product.IsActive &&
+                !product.IsArchived &&
+                (product.CategoryId == null ||
+                 (product.Category!.IsActive && !product.Category.IsArchived)) &&
+                (product.SubcategoryId == null ||
+                 (product.Subcategory!.IsActive && !product.Subcategory.IsArchived)),
             cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Product>> GetCatalogPageAsync(
+        ProductCatalogQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        return await BuildCatalogQuery(query)
+            .OrderBy(product => product.Name)
+            .Skip((query.PageNumber - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountCatalogAsync(
+        ProductCatalogQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        return BuildCatalogQuery(query).CountAsync(cancellationToken);
     }
 
     public async Task AddAsync(
@@ -108,6 +143,8 @@ public class ProductRepository : IProductRepository
     CancellationToken cancellationToken = default)
     {
         return await _dbContext.Products
+            .Include(product => product.Category)
+            .Include(product => product.Subcategory)
             .Where(product => ids.Contains(product.Id))
             .ToListAsync(cancellationToken);
     }
@@ -157,5 +194,122 @@ public class ProductRepository : IProductRepository
         }
 
         return query.CountAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Product>> GetAdminPageAsync(
+        AdminProductQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        return await BuildAdminQuery(query)
+            .OrderBy(product => product.Name)
+            .Skip((query.PageNumber - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Product>> GetByCategoryAsync(
+        Guid categoryId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Products
+            .Where(product => product.CategoryId == categoryId)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Product>> GetBySubcategoryAsync(
+        Guid subcategoryId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Products
+            .Where(product => product.SubcategoryId == subcategoryId)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountAdminProductsAsync(
+        AdminProductQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        return BuildAdminQuery(query).CountAsync(cancellationToken);
+    }
+
+    private IQueryable<Product> BuildCatalogQuery(ProductCatalogQuery query)
+    {
+        var products = _dbContext.Products
+            .AsNoTracking()
+            .Include(product => product.Category)
+            .Include(product => product.Subcategory)
+            .Where(product =>
+                product.IsActive &&
+                !product.IsArchived &&
+                (product.CategoryId == null ||
+                 (product.Category!.IsActive && !product.Category.IsArchived)) &&
+                (product.SubcategoryId == null ||
+                 (product.Subcategory!.IsActive && !product.Subcategory.IsArchived)));
+
+        if (query.CategoryId.HasValue)
+            products = products.Where(product => product.CategoryId == query.CategoryId);
+
+        if (!string.IsNullOrWhiteSpace(query.SubcategoryName))
+        {
+            var normalizedName = query.SubcategoryName.Trim().ToUpperInvariant();
+            products = products.Where(product =>
+                product.Subcategory != null &&
+                product.Subcategory.NormalizedName == normalizedName);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var pattern = $"%{query.Search.Trim()}%";
+            products = products.Where(product =>
+                EF.Functions.ILike(product.Name, pattern) ||
+                EF.Functions.ILike(product.Code, pattern));
+        }
+
+        return products;
+    }
+
+    private IQueryable<Product> BuildAdminQuery(AdminProductQuery query)
+    {
+        var products = _dbContext.Products
+            .AsNoTracking()
+            .Include(product => product.Category)
+            .Include(product => product.Subcategory)
+            .AsQueryable();
+
+        if (!query.IncludeArchived)
+            products = products.Where(product => !product.IsArchived);
+
+        if (query.CategoryId.HasValue)
+            products = products.Where(product => product.CategoryId == query.CategoryId);
+
+        if (query.SubcategoryId.HasValue)
+            products = products.Where(product => product.SubcategoryId == query.SubcategoryId);
+
+        if (query.IsActive.HasValue)
+            products = products.Where(product => product.IsActive == query.IsActive);
+
+        if (query.InStock.HasValue)
+        {
+            products = query.InStock.Value
+                ? products.Where(product => product.StockQuantity > 0)
+                : products.Where(product => product.StockQuantity <= 0);
+        }
+
+        if (query.LowStock.HasValue)
+        {
+            products = query.LowStock.Value
+                ? products.Where(product => product.StockQuantity <= product.MinimumStockQuantity)
+                : products.Where(product => product.StockQuantity > product.MinimumStockQuantity);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var pattern = $"%{query.Search.Trim()}%";
+            products = products.Where(product =>
+                EF.Functions.ILike(product.Name, pattern) ||
+                EF.Functions.ILike(product.Code, pattern));
+        }
+
+        return products;
     }
 }

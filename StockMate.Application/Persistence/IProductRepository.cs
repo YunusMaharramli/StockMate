@@ -1,5 +1,7 @@
 ﻿using StockMate.Domain.Entities;
 
+using StockMate.Application.Products.Models;
+
 namespace StockMate.Application.Persistence;
 
 public interface IProductRepository
@@ -24,6 +26,14 @@ public interface IProductRepository
     Task<int> CountActiveAsync(
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Product>> GetCatalogPageAsync(
+        ProductCatalogQuery query,
+        CancellationToken cancellationToken = default);
+
+    Task<int> CountCatalogAsync(
+        ProductCatalogQuery query,
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(
         Product product,
         CancellationToken cancellationToken = default);
@@ -41,6 +51,14 @@ public interface IProductRepository
     Task<IReadOnlyList<Product>> GetByIdsAsync(
     IReadOnlyCollection<Guid> ids,
     CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<Product>> GetByCategoryAsync(
+        Guid categoryId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<Product>> GetBySubcategoryAsync(
+        Guid subcategoryId,
+        CancellationToken cancellationToken = default);
     void Update(Product product);
     Task<IReadOnlyList<Product>> GetAdminPageAsync(
     int pageNumber,
@@ -50,5 +68,13 @@ public interface IProductRepository
 
     Task<int> CountAdminProductsAsync(
         string? search,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<Product>> GetAdminPageAsync(
+        AdminProductQuery query,
+        CancellationToken cancellationToken = default);
+
+    Task<int> CountAdminProductsAsync(
+        AdminProductQuery query,
         CancellationToken cancellationToken = default);
 }

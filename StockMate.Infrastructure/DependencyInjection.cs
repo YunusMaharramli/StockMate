@@ -33,6 +33,8 @@ public static class DependencyInjection
         services.AddScoped<IStockPurchaseRepository,StockPurchaseRepository>();
         services.AddScoped<ISaleRecordRepository,SaleRecordRepository>();
         services.AddScoped<ITelegramInviteRepository,TelegramInviteRepository>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<ISubcategoryRepository, SubcategoryRepository>();
         return services;
     }
 }

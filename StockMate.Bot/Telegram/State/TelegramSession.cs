@@ -22,16 +22,11 @@ public class TelegramSession
     public Guid? ProductId { get; set; }
 
     public int? StockQuantity { get; set; }
-    public string? ProductName { get; set; }
-
-    public string? ProductCode { get; set; }
-
-    public decimal? ProductPrice { get; set; }
-
-    public int? InitialStockQuantity { get; set; }
-
-    public string? ProductDescription { get; set; }
     public bool ContinueToCheckout { get; set; }
+    public Guid? ProductCategoryId { get; set; }
+    public string? ProductSubcategoryName { get; set; }
+    public string? ProductSearch { get; set; }
+    public int ProductCatalogPage { get; set; } = 1;
     public long? WorkerTelegramUserId { get; set; }
     public string? WorkerFirstName { get; set; }
     public string? WorkerLastName { get; set; }

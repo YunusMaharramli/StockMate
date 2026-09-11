@@ -8,4 +8,12 @@ public sealed record ProductDto(
     int StockQuantity,
     string Description,
     string? ImageReference,
-    bool IsActive);
+    bool IsActive,
+    bool IsArchived,
+    Guid? CategoryId,
+    string? CategoryName,
+    Guid? SubcategoryId,
+    string? SubcategoryName,
+    int MinimumStockQuantity,
+    bool IsLowStock,
+    bool IsCatalogVisible);

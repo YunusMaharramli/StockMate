@@ -102,6 +102,34 @@ public class ProductTests
             movement.Type);
     }
 
+    [Fact]
+    public void ClassificationAndMinimumStock_ShouldBeStored()
+    {
+        var product = CreateProduct(stockQuantity: 3);
+        var categoryId = Guid.NewGuid();
+        var subcategoryId = Guid.NewGuid();
+
+        product.ChangeClassification(categoryId, subcategoryId);
+        product.SetMinimumStockQuantity(5);
+
+        Assert.Equal(categoryId, product.CategoryId);
+        Assert.Equal(subcategoryId, product.SubcategoryId);
+        Assert.Equal(5, product.MinimumStockQuantity);
+    }
+
+    [Fact]
+    public void ArchiveAndRestore_ShouldPreserveIndividualActiveState()
+    {
+        var product = CreateProduct(stockQuantity: 3);
+        product.Deactivate();
+
+        product.Archive();
+        product.Restore();
+
+        Assert.False(product.IsArchived);
+        Assert.False(product.IsActive);
+    }
+
     private static Product CreateProduct(int stockQuantity)
     {
         return new Product(

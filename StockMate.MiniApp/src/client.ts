@@ -1,5 +1,6 @@
 import type {
   Assignment,
+  Category,
   Customer,
   CreateStockPurchaseItem,
   DeliveryCompany,
@@ -18,6 +19,7 @@ import type {
   StockAction,
   StockMovement,
   StockPurchase,
+  Subcategory,
 } from './models';
 
 const configuredBaseUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
@@ -47,10 +49,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 async function getAllProducts(search = '') {
-  const first = await request<PagedResult<Product>>(`/api/miniapp/admin/products?pageNumber=1&pageSize=20&search=${encodeURIComponent(search)}`);
+  const first = await request<PagedResult<Product>>(`/api/miniapp/admin/products?pageNumber=1&pageSize=20&includeArchived=true&search=${encodeURIComponent(search)}`);
   const products = [...first.items];
   for (let page = 2; page <= first.totalPages; page += 1) {
-    const next = await request<PagedResult<Product>>(`/api/miniapp/admin/products?pageNumber=${page}&pageSize=20&search=${encodeURIComponent(search)}`);
+    const next = await request<PagedResult<Product>>(`/api/miniapp/admin/products?pageNumber=${page}&pageSize=20&includeArchived=true&search=${encodeURIComponent(search)}`);
     products.push(...next.items);
   }
   return products;
@@ -83,9 +85,26 @@ export const api = {
   getProducts: (pageNumber = 1, search = '') => request<PagedResult<Product>>(`/api/miniapp/admin/products?pageNumber=${pageNumber}&pageSize=20&search=${encodeURIComponent(search)}`),
   getAllProducts,
   createProduct: (data: ProductInput) => request<Product>('/api/miniapp/admin/products', { method: 'POST', body: JSON.stringify(data) }),
-  updateProduct: (id: string, data: { name: string; description: string; imageReference?: string }) => request<void>(`/api/miniapp/admin/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateProduct: (id: string, data: { name: string; description: string; imageReference?: string; categoryId: string; subcategoryId?: string; minimumStockQuantity: number }) => request<void>(`/api/miniapp/admin/products/${id}`, { method: 'PUT', body: JSON.stringify({ ...data, subcategoryId: data.subcategoryId || null, updateClassification: true }) }),
+  getCategories: (includeArchived = false) => request<Category[]>(`/api/miniapp/categories?includeArchived=${includeArchived}`),
+  createCategory: (name: string, sortOrder: number) => request<Category>('/api/miniapp/categories', { method: 'POST', body: JSON.stringify({ name, sortOrder }) }),
+  updateCategory: (id: string, name: string, sortOrder: number) => request<void>(`/api/miniapp/categories/${id}`, { method: 'PUT', body: JSON.stringify({ name, sortOrder }) }),
+  setCategoryActive: (id: string, active: boolean) => request<void>(`/api/miniapp/categories/${id}/${active ? 'activate' : 'deactivate'}`, { method: 'POST' }),
+  restoreCategory: (id: string) => request<void>(`/api/miniapp/categories/${id}/restore`, { method: 'POST' }),
+  removeCategory: (id: string, mode: 'MoveProducts' | 'ArchiveCategory' | 'ArchiveProducts', targetCategoryId?: string) => request<void>(`/api/miniapp/categories/${id}/remove`, { method: 'POST', body: JSON.stringify({ mode, targetCategoryId: targetCategoryId || null }) }),
+  deleteEmptyCategory: (id: string) => request<void>(`/api/miniapp/categories/${id}`, { method: 'DELETE' }),
+  getSubcategories: (categoryId?: string, includeArchived = false) => request<Subcategory[]>(`/api/miniapp/subcategories?includeArchived=${includeArchived}${categoryId ? `&categoryId=${categoryId}` : ''}`),
+  createSubcategory: (categoryId: string, name: string, sortOrder: number) => request<Subcategory>('/api/miniapp/subcategories', { method: 'POST', body: JSON.stringify({ categoryId, name, sortOrder }) }),
+  updateSubcategory: (id: string, name: string, sortOrder: number) => request<void>(`/api/miniapp/subcategories/${id}`, { method: 'PUT', body: JSON.stringify({ name, sortOrder }) }),
+  setSubcategoryActive: (id: string, active: boolean) => request<void>(`/api/miniapp/subcategories/${id}/${active ? 'activate' : 'deactivate'}`, { method: 'POST' }),
+  restoreSubcategory: (id: string) => request<void>(`/api/miniapp/subcategories/${id}/restore`, { method: 'POST' }),
+  removeSubcategory: (id: string, mode: 'MoveProducts' | 'ArchiveSubcategory' | 'ArchiveProducts', targetSubcategoryId?: string) => request<void>(`/api/miniapp/subcategories/${id}/remove`, { method: 'POST', body: JSON.stringify({ mode, targetSubcategoryId: targetSubcategoryId || null }) }),
+  deleteEmptySubcategory: (id: string) => request<void>(`/api/miniapp/subcategories/${id}`, { method: 'DELETE' }),
   changePrice: (id: string, price: number) => request<void>(`/api/miniapp/admin/products/${id}/price`, { method: 'PATCH', body: JSON.stringify({ price }) }),
   setProductActive: (id: string, isActive: boolean) => request<void>(`/api/miniapp/admin/products/${id}/active`, { method: 'PUT', body: JSON.stringify({ isActive }) }),
+  archiveProduct: (id: string) => request<void>(`/api/miniapp/admin/products/${id}/archive`, { method: 'POST' }),
+  restoreProduct: (id: string) => request<void>(`/api/miniapp/admin/products/${id}/restore`, { method: 'POST' }),
+  applyBulkProductAction: (productIds: string[], action: 'Activate' | 'Deactivate' | 'Archive' | 'Restore' | 'Move', categoryId?: string, subcategoryId?: string) => request<void>('/api/miniapp/admin/products/bulk', { method: 'POST', body: JSON.stringify({ productIds, action, categoryId: categoryId || null, subcategoryId: subcategoryId || null }) }),
   changeStock: (id: string, action: StockAction, quantity: number, reason: string) => request<void>(`/api/miniapp/admin/products/${id}/stock`, { method: 'POST', body: JSON.stringify({ action, quantity, reason }) }),
   getStockHistory: (id: string) => request<StockMovement[]>(`/api/miniapp/admin/products/${id}/stock-history`),
   uploadProductImage: async (image: File) => {
