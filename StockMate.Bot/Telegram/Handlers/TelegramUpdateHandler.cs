@@ -934,6 +934,13 @@ public class TelegramUpdateHandler
 
         if (query.Data == "admin:customer-menu")
         {
+            await _customerService.CreateOrUpdateAsync(
+                new UpsertCustomerRequest(
+                    query.From.Id,
+                    query.From.FirstName,
+                    query.From.LastName,
+                    query.From.Username));
+
             await SendCustomerMainMenuAsync(chatId);
             return;
         }
