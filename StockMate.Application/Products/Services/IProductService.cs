@@ -17,8 +17,12 @@ public interface IProductService
         int pageSize,
         CancellationToken cancellationToken = default);
 
-    Task<PagedResult<ProductDto>> GetCatalogPageAsync(
+    Task<PagedResult<ProductCatalogItemDto>> GetCatalogPageAsync(
         ProductCatalogQuery query,
+        CancellationToken cancellationToken = default);
+
+    Task<ProductCatalogItemDto?> GetCatalogProductByIdAsync(
+        Guid productId,
         CancellationToken cancellationToken = default);
 
     Task ChangePriceAsync(

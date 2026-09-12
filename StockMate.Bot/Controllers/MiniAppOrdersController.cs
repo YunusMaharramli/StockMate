@@ -1,26 +1,24 @@
 using Microsoft.AspNetCore.Mvc;
 using StockMate.Application.Notifications;
 using StockMate.Application.Orders.Services;
-using StockMate.Application.Staff.Models;
 using StockMate.Bot.Security;
+using StockMate.Bot.Security.Models;
 using StockMate.Domain.Enums;
 
 namespace StockMate.Bot.Controllers;
 
 [ApiController]
 [Route("api/miniapp/admin/orders")]
+[MiniAppAuthorize(MiniAppUserRole.Admin)]
 public class MiniAppOrdersController : ControllerBase
 {
-    private readonly IMiniAppIdentityService _identity;
     private readonly IOrderService _orderService;
     private readonly IWorkflowNotificationService _notifications;
 
     public MiniAppOrdersController(
-        IMiniAppIdentityService identity,
         IOrderService orderService,
         IWorkflowNotificationService notifications)
     {
-        _identity = identity;
         _orderService = orderService;
         _notifications = notifications;
     }
@@ -28,28 +26,24 @@ public class MiniAppOrdersController : ControllerBase
     [HttpGet("new")]
     public async Task<IActionResult> GetNew(CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         return Ok(await _orderService.GetNewOrdersAsync(cancellationToken));
     }
 
     [HttpGet("active")]
     public async Task<IActionResult> GetActive(CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         return Ok(await _orderService.GetActiveOrdersAsync(cancellationToken));
     }
 
     [HttpGet("history")]
     public async Task<IActionResult> GetHistory(CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         return Ok(await _orderService.GetOrderHistoryAsync(cancellationToken));
     }
 
     [HttpGet("{orderNumber:long}")]
     public async Task<IActionResult> GetByNumber(long orderNumber, CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         var order = await _orderService.GetByOrderNumberAsync(orderNumber, cancellationToken);
         return order is null ? NotFound() : Ok(order);
     }
@@ -57,7 +51,6 @@ public class MiniAppOrdersController : ControllerBase
     [HttpPut("{orderNumber:long}/confirm")]
     public async Task<IActionResult> Confirm(long orderNumber, CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _orderService.ConfirmAsync(orderNumber, cancellationToken);
         await _notifications.NotifyOrderConfirmedAsync(orderNumber, cancellationToken);
         return NoContent();
@@ -66,7 +59,6 @@ public class MiniAppOrdersController : ControllerBase
     [HttpPut("{orderNumber:long}/preparing")]
     public async Task<IActionResult> MarkPreparing(long orderNumber, CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _orderService.MarkAsPreparingAsync(orderNumber, cancellationToken);
         return NoContent();
     }
@@ -77,7 +69,6 @@ public class MiniAppOrdersController : ControllerBase
         [FromBody] SetOrderDeliveryModeRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _orderService.SetDeliveryModeAsync(orderNumber, request.Mode, cancellationToken);
         return NoContent();
     }
@@ -88,7 +79,6 @@ public class MiniAppOrdersController : ControllerBase
         [FromBody] MiniAppCancelOrderRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _orderService.CancelAsync(orderNumber, request.Reason, cancellationToken);
         return NoContent();
     }
@@ -96,15 +86,9 @@ public class MiniAppOrdersController : ControllerBase
     [HttpPut("{orderNumber:long}/cancel-remaining")]
     public async Task<IActionResult> CancelRemaining(long orderNumber, CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         return Ok(await _orderService.CancelRemainingItemsAsync(orderNumber, cancellationToken));
     }
 
-    private Task<StaffDto> RequireAdminAsync(CancellationToken cancellationToken)
-        => _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
 }
 
 public sealed record SetOrderDeliveryModeRequest(DeliveryMode Mode);

@@ -1,5 +1,6 @@
 ﻿using StockMate.Application.Customers.Models;
 using StockMate.Application.Persistence;
+using StockMate.Application.Notifications;
 using StockMate.Domain.Entities;
 
 namespace StockMate.Application.Customers.Services;
@@ -7,10 +8,12 @@ namespace StockMate.Application.Customers.Services;
 public class CustomerService : ICustomerService
 {
     private readonly ICustomerRepository _customerRepository;
+    private readonly IUserAccessChangedNotifier _accessNotifier;
 
-    public CustomerService(ICustomerRepository customerRepository)
+    public CustomerService(ICustomerRepository customerRepository, IUserAccessChangedNotifier accessNotifier)
     {
         _customerRepository = customerRepository;
+        _accessNotifier = accessNotifier;
     }
 
     public async Task<CustomerDto> CreateOrUpdateAsync(
@@ -93,6 +96,19 @@ public class CustomerService : ICustomerService
         await _customerRepository.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task UpdatePhoneNumberAsync(
+        long telegramUserId,
+        string phoneNumber,
+        CancellationToken cancellationToken = default)
+    {
+        var customer = await GetRequiredCustomerAsync(
+            telegramUserId,
+            cancellationToken);
+
+        customer.ChangePhoneNumber(phoneNumber);
+        await _customerRepository.SaveChangesAsync(cancellationToken);
+    }
+
     private async Task<Customer> GetRequiredCustomerAsync(
         long telegramUserId,
         CancellationToken cancellationToken)
@@ -152,6 +168,7 @@ public class CustomerService : ICustomerService
 
         customer.Block();
         await _customerRepository.SaveChangesAsync(cancellationToken);
+        await _accessNotifier.NotifyAsync(customer.TelegramUserId, cancellationToken);
     }
 
     public async Task ReactivateAsync(
@@ -164,5 +181,6 @@ public class CustomerService : ICustomerService
 
         customer.Reactivate();
         await _customerRepository.SaveChangesAsync(cancellationToken);
+        await _accessNotifier.NotifyAsync(customer.TelegramUserId, cancellationToken);
     }
 }

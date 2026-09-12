@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using StockMate.Application.Shipments.Services;
 using StockMate.Bot.Security;
+using StockMate.Bot.Security.Models;
 using StockMate.Domain.Enums;
 
 namespace StockMate.Bot.Controllers;
@@ -9,63 +10,55 @@ namespace StockMate.Bot.Controllers;
 [Route("api/miniapp")]
 public class ShipmentsController : ControllerBase
 {
-    private readonly IMiniAppIdentityService _identity;
     private readonly IShipmentService _shipmentService;
 
-    public ShipmentsController(IMiniAppIdentityService identity, IShipmentService shipmentService)
+    public ShipmentsController(IShipmentService shipmentService)
     {
-        _identity = identity;
         _shipmentService = shipmentService;
     }
 
     [HttpPost("admin/orders/{orderNumber:long}/shipments")]
+    [MiniAppAuthorize(MiniAppUserRole.Admin)]
     public async Task<IActionResult> Create(
         long orderNumber,
         [FromBody] CreateShipmentRequest request,
         CancellationToken cancellationToken)
     {
-        var admin = await _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
+        var admin = MiniAppAuthorizationFilter.GetIdentity(HttpContext);
         var shipment = await _shipmentService.CreateReadyShipmentAsync(
-            orderNumber, request.WorkerId, admin.Id, cancellationToken);
+            orderNumber, request.WorkerId, admin.StaffId!.Value, cancellationToken);
         return Ok(shipment);
     }
 
     [HttpGet("worker/shipments")]
+    [MiniAppAuthorize(MiniAppUserRole.Worker)]
     public async Task<IActionResult> GetMine(CancellationToken cancellationToken)
     {
-        var worker = await _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Worker,
-            cancellationToken);
-        return Ok(await _shipmentService.GetWorkerShipmentsAsync(worker.Id, cancellationToken));
+        var worker = MiniAppAuthorizationFilter.GetIdentity(HttpContext);
+        return Ok(await _shipmentService.GetWorkerShipmentsAsync(
+            worker.StaffId!.Value,
+            cancellationToken));
     }
 
     [HttpGet("admin/orders/{orderNumber:long}/shipments")]
+    [MiniAppAuthorize(MiniAppUserRole.Admin)]
     public async Task<IActionResult> GetForOrder(
         long orderNumber,
         CancellationToken cancellationToken)
     {
-        await _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
         return Ok(await _shipmentService.GetOrderShipmentsAsync(orderNumber, cancellationToken));
     }
 
     [HttpPut("shipments/{shipmentId:guid}/status")]
+    [MiniAppAuthorize(MiniAppUserRole.Admin, MiniAppUserRole.Worker)]
     public async Task<IActionResult> ChangeStatus(
         Guid shipmentId,
         [FromBody] ChangeShipmentStatusRequest request,
         CancellationToken cancellationToken)
     {
-        var staff = await _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            cancellationToken: cancellationToken);
+        var staff = MiniAppAuthorizationFilter.GetIdentity(HttpContext);
         return Ok(await _shipmentService.ChangeStatusAsync(
-            shipmentId, staff.Id, request.Status, cancellationToken));
+            shipmentId, staff.StaffId!.Value, request.Status, cancellationToken));
     }
 }
 

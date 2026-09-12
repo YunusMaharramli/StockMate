@@ -1,23 +1,21 @@
 using Microsoft.AspNetCore.Mvc;
 using StockMate.Application.Orders.Services;
-using StockMate.Application.Staff.Models;
 using StockMate.Bot.Security;
+using StockMate.Bot.Security.Models;
 using StockMate.Domain.Enums;
 
 namespace StockMate.Bot.Controllers;
 
 [ApiController]
 [Route("api/miniapp/admin/orders")]
+[MiniAppAuthorize(MiniAppUserRole.Admin)]
 public sealed class MiniAppAdminOperationsController : ControllerBase
 {
-    private readonly IMiniAppIdentityService _identity;
     private readonly IOrderService _orders;
 
     public MiniAppAdminOperationsController(
-        IMiniAppIdentityService identity,
         IOrderService orders)
     {
-        _identity = identity;
         _orders = orders;
     }
 
@@ -26,7 +24,6 @@ public sealed class MiniAppAdminOperationsController : ControllerBase
         long orderNumber,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _orders.MarkAsDeliveringAsync(orderNumber, cancellationToken);
         return NoContent();
     }
@@ -36,7 +33,6 @@ public sealed class MiniAppAdminOperationsController : ControllerBase
         long orderNumber,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _orders.CompleteAsync(orderNumber, cancellationToken);
         return NoContent();
     }
@@ -46,7 +42,6 @@ public sealed class MiniAppAdminOperationsController : ControllerBase
         long orderNumber,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         return Ok(await _orders.DeliverReadyItemsAsync(orderNumber, cancellationToken));
     }
 
@@ -56,7 +51,6 @@ public sealed class MiniAppAdminOperationsController : ControllerBase
         [FromBody] MiniAppDeliveryFeeRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _orders.SetDeliveryFeeAsync(orderNumber, request.DeliveryFee, cancellationToken);
         return NoContent();
     }
@@ -67,7 +61,6 @@ public sealed class MiniAppAdminOperationsController : ControllerBase
         [FromBody] MiniAppAdminNoteRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _orders.SetAdminNoteAsync(orderNumber, request.AdminNote, cancellationToken);
         return NoContent();
     }
@@ -79,7 +72,6 @@ public sealed class MiniAppAdminOperationsController : ControllerBase
         [FromBody] MiniAppSpecialOrderStatusRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _orders.ChangeSpecialOrderStatusAsync(
             orderNumber,
             orderItemId,
@@ -88,11 +80,6 @@ public sealed class MiniAppAdminOperationsController : ControllerBase
         return NoContent();
     }
 
-    private Task<StaffDto> RequireAdminAsync(CancellationToken cancellationToken)
-        => _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
 }
 
 public sealed record MiniAppDeliveryFeeRequest(decimal DeliveryFee);

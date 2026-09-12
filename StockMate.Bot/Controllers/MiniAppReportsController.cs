@@ -1,25 +1,22 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using StockMate.Application.Reports.Services;
-using StockMate.Application.Staff.Models;
 using StockMate.Bot.Security;
-using StockMate.Domain.Enums;
+using StockMate.Bot.Security.Models;
 
 namespace StockMate.Bot.Controllers;
 
 [ApiController]
 [Route("api/miniapp/admin/reports")]
+[MiniAppAuthorize(MiniAppUserRole.Admin)]
 public sealed class MiniAppReportsController
     : ControllerBase
 {
-    private readonly IMiniAppIdentityService _identity;
     private readonly IInventoryReportService
         _inventoryReportService;
 
     public MiniAppReportsController(
-        IMiniAppIdentityService identity,
         IInventoryReportService inventoryReportService)
     {
-        _identity = identity;
         _inventoryReportService = inventoryReportService;
     }
 
@@ -30,8 +27,6 @@ public sealed class MiniAppReportsController
         [FromQuery] Guid? deliveryCompanyId,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
-
         var report =
             await _inventoryReportService.GetTurnoverAsync(
                 fromUtc,
@@ -40,14 +35,5 @@ public sealed class MiniAppReportsController
                 cancellationToken);
 
         return Ok(report);
-    }
-
-    private Task<StaffDto> RequireAdminAsync(
-        CancellationToken cancellationToken)
-    {
-        return _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
     }
 }

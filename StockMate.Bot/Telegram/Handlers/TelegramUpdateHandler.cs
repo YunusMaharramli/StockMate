@@ -16,6 +16,8 @@ using StockMate.Application.Staff.Services;
 using StockMate.Application.Subcategories.Services;
 using StockMate.Application.TelegramInvites.Services;
 using StockMate.Bot.Options;
+using StockMate.Bot.Security.Models;
+using StockMate.Bot.Telegram.Services;
 using StockMate.Bot.Telegram.State;
 using StockMate.Domain.Enums;
 using System.Text;
@@ -43,6 +45,7 @@ public class TelegramUpdateHandler
     private readonly IOrderAssignmentService _assignmentService;
     private readonly IShipmentService _shipmentService;
     private readonly ITelegramInviteService _telegramInviteService;
+    private readonly IMiniAppMenuButtonService _miniAppMenuButtonService;
     private readonly TelegramOptions _telegramOptions;
 
     public TelegramUpdateHandler(
@@ -60,6 +63,7 @@ public class TelegramUpdateHandler
     IOrderAssignmentService assignmentService,
     IShipmentService shipmentService,
     ITelegramInviteService telegramInviteService,
+    IMiniAppMenuButtonService miniAppMenuButtonService,
     IOptions<TelegramOptions> telegramOptions,
     ILogger<TelegramUpdateHandler> logger)
     {
@@ -78,6 +82,7 @@ public class TelegramUpdateHandler
         _assignmentService = assignmentService;
         _shipmentService = shipmentService;
         _telegramInviteService = telegramInviteService;
+        _miniAppMenuButtonService = miniAppMenuButtonService;
         _telegramOptions = telegramOptions.Value;
     }
 
@@ -934,14 +939,7 @@ public class TelegramUpdateHandler
 
         if (query.Data == "admin:customer-menu")
         {
-            await _customerService.CreateOrUpdateAsync(
-                new UpsertCustomerRequest(
-                    query.From.Id,
-                    query.From.FirstName,
-                    query.From.LastName,
-                    query.From.Username));
-
-            await SendCustomerMainMenuAsync(chatId);
+            await SendAdminMainMenuAsync(chatId);
             return;
         }
 
@@ -1524,6 +1522,9 @@ public class TelegramUpdateHandler
     {
         var user = message.From!;
 
+        if (message.Chat.Type != ChatType.Private)
+            return;
+
         if (user.Id == _telegramOptions.AdminUserId)
         {
             await _staffService.EnsureAdminAsync(
@@ -1532,21 +1533,24 @@ public class TelegramUpdateHandler
                 user.LastName,
                 user.Username);
 
+            await _miniAppMenuButtonService.SetAsync(user.Id, MiniAppUserRole.Admin);
             await SendAdminMainMenuAsync(message.Chat.Id);
             return;
         }
 
         var staff = await _staffService.GetByTelegramUserIdAsync(user.Id);
-        if (staff?.Role == StaffRole.Worker)
+        if (staff is not null)
         {
-            if (!staff.IsActive)
+            if (!staff.IsActive || staff.Role != StaffRole.Worker)
             {
+                await _miniAppMenuButtonService.ResetAsync(user.Id);
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "İşçi hesabınız hazırda passivdir. Adminlə əlaqə saxlayın.");
+                    "İcazəniz yoxdur.");
                 return;
             }
 
+            await _miniAppMenuButtonService.SetAsync(user.Id, MiniAppUserRole.Worker);
             if (string.IsNullOrWhiteSpace(_telegramOptions.MiniAppUrl))
             {
                 await _botClient.SendMessage(
@@ -1557,8 +1561,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "Tapşırıqlarınızı Mini App panelindən idarə edin.",
-                replyMarkup: BuildMiniAppKeyboard("👷 İşçi panelini aç"));
+                "Tapşırıqlarınızı mesaj sətrinin yanındakı “📦 Tapşırıqlar” düyməsindən idarə edin.");
             return;
         }
 
@@ -1572,6 +1575,7 @@ public class TelegramUpdateHandler
 
             if (!accepted)
             {
+                await _miniAppMenuButtonService.ResetAsync(user.Id);
                 await SendInviteRequiredMessageAsync(message.Chat.Id);
                 return;
             }
@@ -1589,6 +1593,7 @@ public class TelegramUpdateHandler
 
         _sessionStore.Clear(user.Id);
 
+        await _miniAppMenuButtonService.SetAsync(user.Id, MiniAppUserRole.Customer);
         await SendCustomerMainMenuAsync(message.Chat.Id);
     }
     private async Task SendProductsPageAsync(
@@ -3288,12 +3293,6 @@ public class TelegramUpdateHandler
                 InlineKeyboardButton.WithCallbackData(
                     "🔗 Müştəri dəvət linki",
                     "admin:invite:create")
-            },
-            new[]
-            {
-                InlineKeyboardButton.WithCallbackData(
-                    "👤 Müştəri menyusu",
-                    "admin:customer-menu")
             }
             });
 
@@ -3306,8 +3305,7 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Mini App-da bütün idarəetmə bölmələrini aça bilərsiniz.",
-                replyMarkup: BuildMiniAppKeyboard("📱 İdarəetmə panelini aç"));
+                "Mini App-ı mesaj sətrinin yanındakı “📱 Panel” düyməsindən aça bilərsiniz.");
         }
     }
 
@@ -3348,8 +3346,19 @@ public class TelegramUpdateHandler
         if (telegramUserId == _telegramOptions.AdminUserId)
             return true;
 
+        var staff = await _staffService.GetByTelegramUserIdAsync(telegramUserId);
+        if (staff is not null)
+        {
+            if (!staff.IsActive || staff.Role != StaffRole.Worker)
+                await _miniAppMenuButtonService.ResetAsync(telegramUserId);
+            return false;
+        }
+
         var customer = await _customerService.GetByTelegramUserIdAsync(
             telegramUserId);
+
+        if (customer is not { IsBlocked: false })
+            await _miniAppMenuButtonService.ResetAsync(telegramUserId);
 
         return customer is { IsBlocked: false };
     }

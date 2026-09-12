@@ -1,26 +1,23 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using StockMate.Application.DeliveryCompanies.Models;
 using StockMate.Application.DeliveryCompanies.Services;
-using StockMate.Application.Staff.Models;
 using StockMate.Bot.Security;
-using StockMate.Domain.Enums;
+using StockMate.Bot.Security.Models;
 
 namespace StockMate.Bot.Controllers;
 
 [ApiController]
 [Route("api/miniapp/admin/delivery-companies")]
+[MiniAppAuthorize(MiniAppUserRole.Admin)]
 public sealed class MiniAppDeliveryCompaniesController
     : ControllerBase
 {
-    private readonly IMiniAppIdentityService _identity;
     private readonly IDeliveryCompanyService
         _deliveryCompanyService;
 
     public MiniAppDeliveryCompaniesController(
-        IMiniAppIdentityService identity,
         IDeliveryCompanyService deliveryCompanyService)
     {
-        _identity = identity;
         _deliveryCompanyService = deliveryCompanyService;
     }
 
@@ -28,8 +25,6 @@ public sealed class MiniAppDeliveryCompaniesController
     public async Task<IActionResult> GetAll(
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
-
         var companies =
             await _deliveryCompanyService.GetAllAsync(
                 cancellationToken);
@@ -42,8 +37,6 @@ public sealed class MiniAppDeliveryCompaniesController
         [FromBody] CreateDeliveryCompanyRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
-
         var company =
             await _deliveryCompanyService.CreateAsync(
                 request,
@@ -60,8 +53,6 @@ public sealed class MiniAppDeliveryCompaniesController
         [FromBody] RenameDeliveryCompanyRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
-
         var company =
             await _deliveryCompanyService.RenameAsync(
                 companyId,
@@ -76,8 +67,6 @@ public sealed class MiniAppDeliveryCompaniesController
         Guid companyId,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
-
         await _deliveryCompanyService.SetActiveAsync(
             companyId,
             true,
@@ -91,22 +80,11 @@ public sealed class MiniAppDeliveryCompaniesController
         Guid companyId,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
-
         await _deliveryCompanyService.SetActiveAsync(
             companyId,
             false,
             cancellationToken);
 
         return NoContent();
-    }
-
-    private Task<StaffDto> RequireAdminAsync(
-        CancellationToken cancellationToken)
-    {
-        return _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
     }
 }

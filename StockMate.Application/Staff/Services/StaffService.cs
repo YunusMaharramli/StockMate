@@ -1,4 +1,5 @@
 using StockMate.Application.Persistence;
+using StockMate.Application.Notifications;
 using StockMate.Application.Staff.Models;
 using StockMate.Domain.Enums;
 using StaffEntity = StockMate.Domain.Entities.Staff;
@@ -11,17 +12,20 @@ public class StaffService : IStaffService
     private readonly IOrderAssignmentRepository _assignmentRepository;
     private readonly IOrderRepository _orderRepository;
     private readonly IShipmentRepository _shipmentRepository;
+    private readonly IUserAccessChangedNotifier _accessNotifier;
 
     public StaffService(
         IStaffRepository staffRepository,
         IOrderAssignmentRepository assignmentRepository,
         IOrderRepository orderRepository,
-        IShipmentRepository shipmentRepository)
+        IShipmentRepository shipmentRepository,
+        IUserAccessChangedNotifier accessNotifier)
     {
         _staffRepository = staffRepository;
         _assignmentRepository = assignmentRepository;
         _orderRepository = orderRepository;
         _shipmentRepository = shipmentRepository;
+        _accessNotifier = accessNotifier;
     }
 
     public async Task<StaffDto> EnsureAdminAsync(
@@ -81,6 +85,7 @@ public class StaffService : IStaffService
 
         await _staffRepository.AddAsync(worker, cancellationToken);
         await _staffRepository.SaveChangesAsync(cancellationToken);
+        await _accessNotifier.NotifyAsync(worker.TelegramUserId, cancellationToken);
         return MapStaff(worker);
     }
 
@@ -108,6 +113,7 @@ public class StaffService : IStaffService
         var staff = await GetRequiredStaffAsync(staffId, cancellationToken);
         staff.Activate();
         await _staffRepository.SaveChangesAsync(cancellationToken);
+        await _accessNotifier.NotifyAsync(staff.TelegramUserId, cancellationToken);
     }
 
     public async Task DeactivateAsync(
@@ -144,6 +150,7 @@ public class StaffService : IStaffService
 
         staff.Deactivate();
         await _staffRepository.SaveChangesAsync(cancellationToken);
+        await _accessNotifier.NotifyAsync(staff.TelegramUserId, cancellationToken);
     }
 
     private async Task<StaffEntity> GetRequiredStaffAsync(

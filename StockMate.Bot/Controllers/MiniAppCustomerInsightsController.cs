@@ -2,24 +2,22 @@ using Microsoft.AspNetCore.Mvc;
 using StockMate.Application.Customers.Services;
 using StockMate.Application.Orders.Services;
 using StockMate.Bot.Security;
-using StockMate.Domain.Enums;
+using StockMate.Bot.Security.Models;
 
 namespace StockMate.Bot.Controllers;
 
 [ApiController]
 [Route("api/miniapp/admin/customers")]
+[MiniAppAuthorize(MiniAppUserRole.Admin)]
 public sealed class MiniAppCustomerInsightsController : ControllerBase
 {
-    private readonly IMiniAppIdentityService _identity;
     private readonly ICustomerService _customers;
     private readonly IOrderService _orders;
 
     public MiniAppCustomerInsightsController(
-        IMiniAppIdentityService identity,
         ICustomerService customers,
         IOrderService orders)
     {
-        _identity = identity;
         _customers = customers;
         _orders = orders;
     }
@@ -29,7 +27,6 @@ public sealed class MiniAppCustomerInsightsController : ControllerBase
         Guid customerId,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         var customer = await _customers.GetByIdAsync(customerId, cancellationToken);
         return customer is null ? NotFound() : Ok(customer);
     }
@@ -39,7 +36,6 @@ public sealed class MiniAppCustomerInsightsController : ControllerBase
         Guid customerId,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         return Ok(await _orders.GetCustomerOrdersByCustomerIdAsync(
             customerId,
             cancellationToken));
@@ -50,14 +46,7 @@ public sealed class MiniAppCustomerInsightsController : ControllerBase
         Guid customerId,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _customers.BlockAsync(customerId, cancellationToken);
         return NoContent();
     }
-
-    private async Task RequireAdminAsync(CancellationToken cancellationToken)
-        => await _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
 }

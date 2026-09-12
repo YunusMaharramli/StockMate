@@ -101,6 +101,20 @@ public class Customer
         UpdatedAtUtc = DateTime.UtcNow;
     }
 
+    public void ChangePhoneNumber(string phoneNumber)
+    {
+        if (string.IsNullOrWhiteSpace(phoneNumber) ||
+            phoneNumber.Count(char.IsDigit) < 9)
+        {
+            throw new ArgumentException(
+                "Telefon nömrəsini düzgün formatda yazın.",
+                nameof(phoneNumber));
+        }
+
+        PhoneNumber = phoneNumber.Trim();
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
     public void Block()
     {
         if (IsBlocked)

@@ -1,28 +1,72 @@
-using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
+using StockMate.Application.Customers.Models;
+using StockMate.Application.Customers.Services;
 using StockMate.Application.Staff.Models;
 using StockMate.Application.Staff.Services;
 using StockMate.Bot.Options;
+using StockMate.Bot.Security.Models;
 using StockMate.Domain.Enums;
 
 namespace StockMate.Bot.Security;
 
-public class TelegramMiniAppIdentityService : IMiniAppIdentityService
+public sealed class TelegramMiniAppIdentityService
+    : IMiniAppIdentityService
 {
-    private static readonly TimeSpan MaximumAge = TimeSpan.FromHours(24);
+    private readonly ITelegramInitDataValidator _initDataValidator;
     private readonly IStaffService _staffService;
+    private readonly ICustomerService _customerService;
     private readonly TelegramOptions _options;
 
     public TelegramMiniAppIdentityService(
+        ITelegramInitDataValidator initDataValidator,
         IStaffService staffService,
+        ICustomerService customerService,
         IOptions<TelegramOptions> options)
     {
+        _initDataValidator = initDataValidator;
         _staffService = staffService;
+        _customerService = customerService;
         _options = options.Value;
+    }
+
+    public async Task<MiniAppIdentity> AuthenticateAsync(
+        string initData,
+        CancellationToken cancellationToken = default)
+    {
+        var telegramUser =
+            _initDataValidator.Validate(initData);
+
+        var staff = await GetAuthorizedStaffAsync(
+            telegramUser,
+            cancellationToken);
+
+        if (staff is not null)
+            return MapStaffIdentity(staff);
+
+        var customer =
+            await _customerService.GetByTelegramUserIdAsync(
+                telegramUser.TelegramUserId,
+                cancellationToken);
+
+        if (customer is null || customer.IsBlocked)
+            throw AccessDenied();
+
+        return MapCustomerIdentity(customer);
+    }
+
+    public async Task<MiniAppIdentity> RequireRoleAsync(
+        string initData,
+        MiniAppUserRole requiredRole,
+        CancellationToken cancellationToken = default)
+    {
+        var identity = await AuthenticateAsync(
+            initData,
+            cancellationToken);
+
+        if (identity.Role != requiredRole)
+            throw AccessDenied();
+
+        return identity;
     }
 
     public async Task<StaffDto> RequireAsync(
@@ -30,56 +74,95 @@ public class TelegramMiniAppIdentityService : IMiniAppIdentityService
         StaffRole? requiredRole = null,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(initData))
-            throw new UnauthorizedAccessException("Telegram initData is required.");
+        var telegramUser =
+            _initDataValidator.Validate(initData);
 
-        var values = QueryHelpers.ParseQuery(initData)
-            .ToDictionary(pair => pair.Key, pair => pair.Value.ToString());
+        var staff = await GetAuthorizedStaffAsync(
+            telegramUser,
+            cancellationToken);
 
-        if (!values.Remove("hash", out var receivedHash) ||
-            string.IsNullOrWhiteSpace(receivedHash))
-            throw new UnauthorizedAccessException("Telegram hash is missing.");
+        if (staff is null)
+            throw AccessDenied();
 
-        var dataCheckString = string.Join(
-            "\n",
-            values.OrderBy(pair => pair.Key, StringComparer.Ordinal)
-                .Select(pair => $"{pair.Key}={pair.Value}"));
-
-        var secretKey = HMACSHA256.HashData(
-            Encoding.UTF8.GetBytes("WebAppData"),
-            Encoding.UTF8.GetBytes(_options.BotToken));
-        var calculatedHash = HMACSHA256.HashData(
-            secretKey,
-            Encoding.UTF8.GetBytes(dataCheckString));
-
-        byte[] receivedHashBytes;
-        try { receivedHashBytes = Convert.FromHexString(receivedHash); }
-        catch (FormatException) { throw new UnauthorizedAccessException("Telegram hash is invalid."); }
-
-        if (!CryptographicOperations.FixedTimeEquals(calculatedHash, receivedHashBytes))
-            throw new UnauthorizedAccessException("Telegram signature is invalid.");
-
-        if (!values.TryGetValue("auth_date", out var authDateText) ||
-            !long.TryParse(authDateText, NumberStyles.None, CultureInfo.InvariantCulture, out var authDate))
-            throw new UnauthorizedAccessException("Telegram auth_date is invalid.");
-
-        var createdAt = DateTimeOffset.FromUnixTimeSeconds(authDate);
-        if (DateTimeOffset.UtcNow - createdAt > MaximumAge || createdAt > DateTimeOffset.UtcNow.AddMinutes(1))
-            throw new UnauthorizedAccessException("Telegram initData has expired.");
-
-        if (!values.TryGetValue("user", out var userJson))
-            throw new UnauthorizedAccessException("Telegram user is missing.");
-
-        using var userDocument = JsonDocument.Parse(userJson);
-        var telegramUserId = userDocument.RootElement.GetProperty("id").GetInt64();
-        var staff = await _staffService.GetByTelegramUserIdAsync(telegramUserId, cancellationToken)
-            ?? throw new UnauthorizedAccessException("User is not a staff member.");
-
-        if (!staff.IsActive)
-            throw new UnauthorizedAccessException("Staff member is inactive.");
-        if (requiredRole.HasValue && staff.Role != requiredRole.Value)
-            throw new UnauthorizedAccessException("Staff member does not have the required role.");
+        if (requiredRole.HasValue &&
+            staff.Role != requiredRole.Value)
+        {
+            throw AccessDenied();
+        }
 
         return staff;
+    }
+
+    private async Task<StaffDto?> GetAuthorizedStaffAsync(
+        TelegramMiniAppUser telegramUser,
+        CancellationToken cancellationToken)
+    {
+        var staff =
+            await _staffService.GetByTelegramUserIdAsync(
+                telegramUser.TelegramUserId,
+                cancellationToken);
+
+        if (telegramUser.TelegramUserId ==
+            _options.AdminUserId)
+        {
+            if (staff is null ||
+                !staff.IsActive ||
+                staff.Role != StaffRole.Admin)
+            {
+                throw AccessDenied();
+            }
+
+            return staff;
+        }
+
+        if (staff is null)
+            return null;
+
+        if (!staff.IsActive ||
+            staff.Role != StaffRole.Worker)
+        {
+            throw AccessDenied();
+        }
+
+        return staff;
+    }
+
+    private static MiniAppIdentity MapStaffIdentity(
+        StaffDto staff)
+    {
+        var role = staff.Role switch
+        {
+            StaffRole.Admin => MiniAppUserRole.Admin,
+            StaffRole.Worker => MiniAppUserRole.Worker,
+            _ => throw AccessDenied()
+        };
+
+        return new MiniAppIdentity(
+            staff.TelegramUserId,
+            role,
+            staff.Id,
+            null,
+            staff.FirstName,
+            staff.LastName,
+            staff.Username);
+    }
+
+    private static MiniAppIdentity MapCustomerIdentity(
+        CustomerDto customer)
+    {
+        return new MiniAppIdentity(
+            customer.TelegramUserId,
+            MiniAppUserRole.Customer,
+            null,
+            customer.Id,
+            customer.FirstName,
+            customer.LastName,
+            customer.Username);
+    }
+
+    private static UnauthorizedAccessException AccessDenied()
+    {
+        return new UnauthorizedAccessException(
+            "İcazəniz yoxdur.");
     }
 }

@@ -1,26 +1,23 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using StockMate.Application.Staff.Models;
 using StockMate.Application.StockPurchases.Models;
 using StockMate.Application.StockPurchases.Services;
 using StockMate.Bot.Security;
-using StockMate.Domain.Enums;
+using StockMate.Bot.Security.Models;
 
 namespace StockMate.Bot.Controllers;
 
 [ApiController]
 [Route("api/miniapp/admin/stock-purchases")]
+[MiniAppAuthorize(MiniAppUserRole.Admin)]
 public sealed class MiniAppStockPurchasesController
     : ControllerBase
 {
-    private readonly IMiniAppIdentityService _identity;
     private readonly IStockPurchaseService
         _stockPurchaseService;
 
     public MiniAppStockPurchasesController(
-        IMiniAppIdentityService identity,
         IStockPurchaseService stockPurchaseService)
     {
-        _identity = identity;
         _stockPurchaseService = stockPurchaseService;
     }
 
@@ -29,8 +26,6 @@ public sealed class MiniAppStockPurchasesController
         [FromBody] CreateStockPurchaseRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
-
         var purchase =
             await _stockPurchaseService.CreateAsync(
                 request,
@@ -47,8 +42,6 @@ public sealed class MiniAppStockPurchasesController
         Guid purchaseId,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
-
         var purchase =
             await _stockPurchaseService.GetByIdAsync(
                 purchaseId,
@@ -65,8 +58,6 @@ public sealed class MiniAppStockPurchasesController
         [FromQuery] DateTime toUtc,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
-
         var purchases =
             await _stockPurchaseService.GetByPeriodAsync(
                 fromUtc,
@@ -74,14 +65,5 @@ public sealed class MiniAppStockPurchasesController
                 cancellationToken);
 
         return Ok(purchases);
-    }
-
-    private Task<StaffDto> RequireAdminAsync(
-        CancellationToken cancellationToken)
-    {
-        return _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
     }
 }

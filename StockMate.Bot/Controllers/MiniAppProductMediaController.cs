@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using StockMate.Application.Products.Services;
 using StockMate.Bot.Security;
-using StockMate.Domain.Enums;
+using StockMate.Bot.Security.Models;
 using Telegram.Bot;
 
 namespace StockMate.Bot.Controllers;
@@ -10,34 +10,27 @@ namespace StockMate.Bot.Controllers;
 public sealed class MiniAppProductMediaController : ControllerBase
 {
     private const int MaximumImageSize = 5 * 1024 * 1024;
-    private readonly IMiniAppIdentityService _identity;
     private readonly IProductService _products;
     private readonly TelegramBotClient _botClient;
     private readonly IWebHostEnvironment _environment;
 
     public MiniAppProductMediaController(
-        IMiniAppIdentityService identity,
         IProductService products,
         TelegramBotClient botClient,
         IWebHostEnvironment environment)
     {
-        _identity = identity;
         _products = products;
         _botClient = botClient;
         _environment = environment;
     }
 
     [HttpPost("api/miniapp/admin/products/images")]
+    [MiniAppAuthorize(MiniAppUserRole.Admin)]
     [RequestSizeLimit(MaximumImageSize)]
     public async Task<IActionResult> Upload(
         IFormFile image,
         CancellationToken cancellationToken)
     {
-        await _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
-
         if (image.Length is <= 0 or > MaximumImageSize)
             throw new ArgumentException("Image must be smaller than 5 MB.");
 

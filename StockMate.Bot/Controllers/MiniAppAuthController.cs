@@ -5,16 +5,28 @@ namespace StockMate.Bot.Controllers;
 
 [ApiController]
 [Route("api/miniapp/auth")]
-public class MiniAppAuthController : ControllerBase
+public sealed class MiniAppAuthController : ControllerBase
 {
-    private readonly IMiniAppIdentityService _identity;
-    public MiniAppAuthController(IMiniAppIdentityService identity) => _identity = identity;
+    private readonly IMiniAppIdentityService _identityService;
+
+    public MiniAppAuthController(
+        IMiniAppIdentityService identityService)
+    {
+        _identityService = identityService;
+    }
 
     [HttpPost]
     public async Task<IActionResult> Authenticate(
         [FromBody] MiniAppAuthRequest request,
         CancellationToken cancellationToken)
-        => Ok(await _identity.RequireAsync(request.InitData, cancellationToken: cancellationToken));
+    {
+        var identity =
+            await _identityService.AuthenticateAsync(
+                request.InitData,
+                cancellationToken);
+
+        return Ok(identity);
+    }
 }
 
 public sealed record MiniAppAuthRequest(string InitData);

@@ -1,8 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StockMate.Application.Persistence;
+using StockMate.Application.Shortages.Exports;
 using StockMate.Infrastructure.Persistence;
 using StockMate.Infrastructure.Repositories;
+using StockMate.Infrastructure.Shortages.Exports;
 
 namespace StockMate.Infrastructure;
 
@@ -35,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<ITelegramInviteRepository,TelegramInviteRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<ISubcategoryRepository, SubcategoryRepository>();
+        services.AddSingleton<IShortageExcelExporter, ShortageExcelExporter>();
         return services;
     }
 }

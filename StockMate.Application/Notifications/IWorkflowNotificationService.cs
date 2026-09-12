@@ -4,6 +4,10 @@ namespace StockMate.Application.Notifications;
 
 public interface IWorkflowNotificationService
 {
+    Task NotifyOrderCreatedAsync(
+        long orderNumber,
+        CancellationToken cancellationToken = default);
+
     Task NotifyOrderConfirmedAsync(
         long orderNumber,
         CancellationToken cancellationToken = default);

@@ -1,6 +1,11 @@
 import type {
   Assignment,
   Category,
+  CustomerAddress,
+  CustomerCart,
+  CustomerCatalogProduct,
+  CustomerOrder,
+  CustomerProfile,
   Customer,
   CreateStockPurchaseItem,
   DeliveryCompany,
@@ -8,6 +13,7 @@ import type {
   InventoryTurnoverReport,
   MissingProduct,
   MissingProductOrder,
+  MiniAppIdentity,
   Order,
   PagedResult,
   Product,
@@ -34,6 +40,21 @@ async function readError(response: Response) {
   return problem?.detail ?? problem?.title ?? 'Əməliyyatı yerinə yetirmək mümkün olmadı.';
 }
 
+async function ensureSuccessful(response: Response): Promise<void> {
+  if (response.ok) return;
+
+  const message = await readError(response);
+
+  if (response.status === 403) {
+    window.dispatchEvent(new CustomEvent(
+      'stockmate:access-denied',
+      { detail: message },
+    ));
+  }
+
+  throw new Error(message);
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
@@ -43,9 +64,31 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       ...options.headers,
     },
   });
-  if (!response.ok) throw new Error(await readError(response));
+  await ensureSuccessful(response);
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+async function downloadFile(path: string, fileName: string): Promise<void> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: {
+      'X-Telegram-Init-Data': initData(),
+    },
+  });
+
+  await ensureSuccessful(response);
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
 async function getAllProducts(search = '') {
@@ -61,7 +104,7 @@ async function getAllProducts(search = '') {
 export const productImageUrl = (productId: string) => `${baseUrl}/api/product-images/${productId}`;
 
 export const api = {
-  authenticate: () => request<Staff>('/api/miniapp/auth', {
+  authenticate: () => request<MiniAppIdentity>('/api/miniapp/auth', {
     method: 'POST', body: JSON.stringify({ initData: initData() }),
   }),
   getNewOrders: () => request<Order[]>('/api/miniapp/admin/orders/new'),
@@ -114,7 +157,7 @@ export const api = {
     const response = await fetch(`${baseUrl}/api/miniapp/admin/products/images`, {
       method: 'POST', headers: { 'X-Telegram-Init-Data': initData() }, body: form,
     });
-    if (!response.ok) throw new Error(await readError(response));
+    await ensureSuccessful(response);
     return response.json() as Promise<{ imageReference: string }>;
   },
   getCustomers: () => request<Customer[]>('/api/miniapp/admin/customers'),
@@ -131,6 +174,17 @@ export const api = {
   changeShipmentStatus: (id: string, status: ShipmentStatus) => request<Shipment>(`/api/miniapp/shipments/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
   getShortages: () => request<MissingProduct[]>('/api/miniapp/admin/shortages'),
   getShortageOrders: (productId: string) => request<MissingProductOrder[]>(`/api/miniapp/admin/shortages/${productId}/orders`),
+  exportShortages: () => {
+    const currentDate = new Date();
+    const year = currentDate.getFullYear();
+    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const day = String(currentDate.getDate()).padStart(2, '0');
+
+    return downloadFile(
+      '/api/miniapp/admin/shortages/export',
+      `catismayan-mehsullar-${year}-${month}-${day}.xlsx`,
+    );
+  },
   getStockPurchases: (fromUtc: string, toUtc: string) => request<StockPurchase[]>(`/api/miniapp/admin/stock-purchases?fromUtc=${encodeURIComponent(fromUtc)}&toUtc=${encodeURIComponent(toUtc)}`),
   createStockPurchase: (purchasedAtUtc: string, note: string | undefined, items: CreateStockPurchaseItem[]) => request<StockPurchase>('/api/miniapp/admin/stock-purchases', { method: 'POST', body: JSON.stringify({ purchasedAtUtc, note: note || null, items }) }),
   getTurnoverReport: (fromUtc: string, toUtc: string, deliveryCompanyId?: string) => request<InventoryTurnoverReport>(`/api/miniapp/admin/reports/inventory-turnover?fromUtc=${encodeURIComponent(fromUtc)}&toUtc=${encodeURIComponent(toUtc)}${deliveryCompanyId ? `&deliveryCompanyId=${encodeURIComponent(deliveryCompanyId)}` : ''}`),
@@ -138,4 +192,21 @@ export const api = {
   createDeliveryCompany: (name: string) => request<DeliveryCompany>('/api/miniapp/admin/delivery-companies', { method: 'POST', body: JSON.stringify({ name }) }),
   renameDeliveryCompany: (id: string, name: string) => request<DeliveryCompany>(`/api/miniapp/admin/delivery-companies/${id}/name`, { method: 'PUT', body: JSON.stringify({ name }) }),
   setDeliveryCompanyActive: (id: string, active: boolean) => request<void>(`/api/miniapp/admin/delivery-companies/${id}/${active ? 'activate' : 'deactivate'}`, { method: 'PUT' }),
+  getCustomerCatalog: (pageNumber = 1, categoryId = '', subcategoryName = '', search = '') => request<PagedResult<CustomerCatalogProduct>>(`/api/miniapp/customer/catalog?pageNumber=${pageNumber}&pageSize=10${categoryId ? `&categoryId=${encodeURIComponent(categoryId)}` : ''}${subcategoryName ? `&subcategoryName=${encodeURIComponent(subcategoryName)}` : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
+  getCustomerCategories: () => request<Category[]>('/api/miniapp/customer/catalog/categories'),
+  getCustomerSubcategories: (categoryId = '') => request<Subcategory[]>(`/api/miniapp/customer/catalog/subcategories${categoryId ? `?categoryId=${encodeURIComponent(categoryId)}` : ''}`),
+  getCustomerCart: () => request<CustomerCart>('/api/miniapp/customer/cart'),
+  setCustomerCartItem: (productId: string, quantity: number) => request<CustomerCart>('/api/miniapp/customer/cart/items', { method: 'PUT', body: JSON.stringify({ productId, quantity }) }),
+  removeCustomerCartItem: (productId: string) => request<CustomerCart>(`/api/miniapp/customer/cart/items/${productId}`, { method: 'DELETE' }),
+  clearCustomerCart: () => request<void>('/api/miniapp/customer/cart', { method: 'DELETE' }),
+  getCustomerProfile: () => request<CustomerProfile>('/api/miniapp/customer/profile'),
+  updateCustomerPhone: (phoneNumber: string) => request<void>('/api/miniapp/customer/profile/phone', { method: 'PUT', body: JSON.stringify({ phoneNumber }) }),
+  getCustomerAddresses: () => request<CustomerAddress[]>('/api/miniapp/customer/profile/addresses'),
+  createCustomerAddress: (addressLine: string) => request<CustomerAddress>('/api/miniapp/customer/profile/addresses', { method: 'POST', body: JSON.stringify({ addressLine, latitude: null, longitude: null }) }),
+  updateCustomerAddress: (id: string, addressLine: string) => request<CustomerAddress>(`/api/miniapp/customer/profile/addresses/${id}`, { method: 'PUT', body: JSON.stringify({ addressLine, latitude: null, longitude: null }) }),
+  deleteCustomerAddress: (id: string) => request<void>(`/api/miniapp/customer/profile/addresses/${id}`, { method: 'DELETE' }),
+  getCustomerDeliveryCompanies: () => request<DeliveryCompany[]>('/api/miniapp/customer/profile/delivery-companies'),
+  getMyOrders: () => request<CustomerOrder[]>('/api/miniapp/customer/orders'),
+  checkoutCustomerOrder: (customerAddressId: string, deliveryCompanyId: string) => request<CustomerOrder>('/api/miniapp/customer/orders/checkout', { method: 'POST', body: JSON.stringify({ customerAddressId, deliveryCompanyId }) }),
+  cancelCustomerOrder: (orderNumber: number) => request<void>(`/api/miniapp/customer/orders/${orderNumber}/cancel`, { method: 'POST' }),
 };

@@ -46,7 +46,7 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<PagedResult<ProductDto>>> GetActivePage(
+    public async Task<ActionResult<PagedResult<ProductCatalogItemDto>>> GetActivePage(
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 5,
         [FromQuery] Guid? categoryId = null,

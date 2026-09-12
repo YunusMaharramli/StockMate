@@ -1,25 +1,21 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using StockMate.Application.Categories.Models;
 using StockMate.Application.Categories.Services;
-using StockMate.Application.Staff.Models;
 using StockMate.Bot.Security;
-using StockMate.Domain.Enums;
+using StockMate.Bot.Security.Models;
 
 namespace StockMate.Bot.Controllers;
 
 [ApiController]
 [Route("api/miniapp/categories")]
+[MiniAppAuthorize(MiniAppUserRole.Admin)]
 public sealed class MiniAppCategoriesController : ControllerBase
 {
     private readonly ICategoryService _categoryService;
-    private readonly IMiniAppIdentityService _identity;
 
-    public MiniAppCategoriesController(
-        ICategoryService categoryService,
-        IMiniAppIdentityService identity)
+    public MiniAppCategoriesController(ICategoryService categoryService)
     {
         _categoryService = categoryService;
-        _identity = identity;
     }
 
     [HttpGet]
@@ -27,7 +23,6 @@ public sealed class MiniAppCategoriesController : ControllerBase
         [FromQuery] bool includeArchived = false,
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         var categories = await _categoryService.GetAllAsync(
             includeArchived,
             cancellationToken);
@@ -39,7 +34,6 @@ public sealed class MiniAppCategoriesController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<CategoryDto>>> GetActive(
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         var categories = await _categoryService.GetActiveAsync(
             cancellationToken);
 
@@ -51,7 +45,6 @@ public sealed class MiniAppCategoriesController : ControllerBase
         Guid categoryId,
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         var category = await _categoryService.GetByIdAsync(
             categoryId,
             cancellationToken);
@@ -69,7 +62,6 @@ public sealed class MiniAppCategoriesController : ControllerBase
         [FromBody] CreateCategoryRequest request,
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         var category = await _categoryService.CreateAsync(
             request,
             cancellationToken);
@@ -86,7 +78,6 @@ public sealed class MiniAppCategoriesController : ControllerBase
         [FromBody] UpdateCategoryRequest request,
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         await _categoryService.UpdateAsync(
             categoryId,
             request,
@@ -100,7 +91,6 @@ public sealed class MiniAppCategoriesController : ControllerBase
         Guid categoryId,
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         await _categoryService.SetActiveAsync(
             categoryId,
             true,
@@ -114,7 +104,6 @@ public sealed class MiniAppCategoriesController : ControllerBase
         Guid categoryId,
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         await _categoryService.SetActiveAsync(
             categoryId,
             false,
@@ -128,7 +117,6 @@ public sealed class MiniAppCategoriesController : ControllerBase
         Guid categoryId,
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         await _categoryService.ArchiveAsync(
             categoryId,
             cancellationToken);
@@ -141,7 +129,6 @@ public sealed class MiniAppCategoriesController : ControllerBase
         Guid categoryId,
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         await _categoryService.RestoreAsync(
             categoryId,
             cancellationToken);
@@ -154,7 +141,6 @@ public sealed class MiniAppCategoriesController : ControllerBase
         Guid categoryId,
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         await _categoryService.DeleteEmptyAsync(
             categoryId,
             cancellationToken);
@@ -168,14 +154,8 @@ public sealed class MiniAppCategoriesController : ControllerBase
         [FromBody] RemoveCategoryRequest request,
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         await _categoryService.RemoveAsync(categoryId, request, cancellationToken);
         return NoContent();
     }
 
-    private Task<StaffDto> RequireAdminAsync(CancellationToken cancellationToken)
-        => _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
 }

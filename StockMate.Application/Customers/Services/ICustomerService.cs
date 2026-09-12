@@ -17,6 +17,11 @@ public interface ICustomerService
         UpdateContactInformationRequest request,
         CancellationToken cancellationToken = default);
 
+    Task UpdatePhoneNumberAsync(
+        long telegramUserId,
+        string phoneNumber,
+        CancellationToken cancellationToken = default);
+
     Task ChangeProductPageSizeAsync(
         long telegramUserId,
         int pageSize,

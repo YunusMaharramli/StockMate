@@ -1,25 +1,23 @@
 using Microsoft.AspNetCore.Mvc;
 using StockMate.Application.TelegramInvites.Services;
 using StockMate.Bot.Security;
-using StockMate.Domain.Enums;
+using StockMate.Bot.Security.Models;
 using Telegram.Bot;
 
 namespace StockMate.Bot.Controllers;
 
 [ApiController]
 [Route("api/miniapp/admin/invites")]
+[MiniAppAuthorize(MiniAppUserRole.Admin)]
 public sealed class MiniAppInvitesController : ControllerBase
 {
-    private readonly IMiniAppIdentityService _identity;
     private readonly ITelegramInviteService _invites;
     private readonly TelegramBotClient _botClient;
 
     public MiniAppInvitesController(
-        IMiniAppIdentityService identity,
         ITelegramInviteService invites,
         TelegramBotClient botClient)
     {
-        _identity = identity;
         _invites = invites;
         _botClient = botClient;
     }
@@ -28,11 +26,6 @@ public sealed class MiniAppInvitesController : ControllerBase
     public async Task<IActionResult> Create(
         CancellationToken cancellationToken)
     {
-        await _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
-
         var bot = await _botClient.GetMe(cancellationToken);
 
         if (string.IsNullOrWhiteSpace(bot.Username))

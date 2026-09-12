@@ -1,0 +1,388 @@
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { api, productImageUrl } from './client';
+import type {
+  Category,
+  CustomerAddress,
+  CustomerCart,
+  CustomerCatalogProduct,
+  CustomerOrder,
+  CustomerProfile,
+  DeliveryCompany,
+  MiniAppIdentity,
+  PagedResult,
+  Subcategory,
+} from './models';
+import './customer.css';
+
+type CustomerSection = 'shop' | 'cart' | 'orders' | 'profile';
+
+const emptyCart: CustomerCart = {
+  id: '',
+  items: [],
+  productsTotal: 0,
+  expiresAtUtc: '',
+};
+
+const demoProducts: CustomerCatalogProduct[] = [
+  { id: 'p1', name: 'KENT Blue', code: 'KNT-CQS-BLU', price: 7.5, description: 'Compact QS', categoryId: 'c1', categoryName: 'KENT', subcategoryId: 's1', subcategoryName: 'Compact QS' },
+  { id: 'p2', name: 'WOOG Cherry', code: 'WOG-QS-CHE', price: 8.2, description: 'Cherry', categoryId: 'c2', categoryName: 'WOOG', subcategoryId: 's2', subcategoryName: 'Queen Size' },
+];
+
+const orderLabels: Record<CustomerOrder['status'], string> = {
+  PendingAdminApproval: 'Admin təsdiqi gözlənilir',
+  Confirmed: 'Təsdiqlənib',
+  Preparing: 'Hazırlanır',
+  Delivering: 'Çatdırılmadadır',
+  Completed: 'Tamamlanıb',
+  Cancelled: 'Ləğv edilib',
+};
+
+function money(value?: number) {
+  return `${(value ?? 0).toFixed(2)} AZN`;
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('az-AZ', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
+
+export default function CustomerApp({
+  identity,
+  demo = false,
+}: {
+  identity?: MiniAppIdentity | null;
+  demo?: boolean;
+}) {
+  const [section, setSection] = useState<CustomerSection>('shop');
+  const [catalog, setCatalog] = useState<PagedResult<CustomerCatalogProduct>>({
+    items: demo ? demoProducts : [],
+    pageNumber: 1,
+    pageSize: 10,
+    totalItems: demo ? demoProducts.length : 0,
+    totalPages: 1,
+  });
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+  const [cart, setCart] = useState<CustomerCart>(emptyCart);
+  const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
+  const [companies, setCompanies] = useState<DeliveryCompany[]>([]);
+  const [orders, setOrders] = useState<CustomerOrder[]>([]);
+  const [categoryId, setCategoryId] = useState('');
+  const [subcategoryName, setSubcategoryName] = useState('');
+  const [search, setSearch] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<CustomerCatalogProduct | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<CustomerOrder | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutPhone, setCheckoutPhone] = useState('');
+  const [addressId, setAddressId] = useState('');
+  const [companyId, setCompanyId] = useState('');
+  const [newAddress, setNewAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(!demo);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const visibleSubcategoryNames = useMemo(() => {
+    const source = categoryId
+      ? subcategories.filter(item => item.categoryId === categoryId)
+      : subcategories;
+    return [...new Set(source.map(item => item.name))]
+      .sort((left, right) => left.localeCompare(right, 'az'));
+  }, [categoryId, subcategories]);
+
+  useEffect(() => {
+    if (demo) {
+      setProfile({ firstName: 'Demo', phoneNumber: '' });
+      return;
+    }
+
+    void run(async () => {
+      const [products, categoryList, subcategoryList, currentCart, currentProfile, addressList, companyList, orderList] = await Promise.all([
+        api.getCustomerCatalog(),
+        api.getCustomerCategories(),
+        api.getCustomerSubcategories(),
+        api.getCustomerCart(),
+        api.getCustomerProfile(),
+        api.getCustomerAddresses(),
+        api.getCustomerDeliveryCompanies(),
+        api.getMyOrders(),
+      ]);
+      setCatalog(products);
+      setCategories(categoryList);
+      setSubcategories(subcategoryList);
+      setCart(currentCart);
+      setProfile(currentProfile);
+      setPhone(currentProfile.phoneNumber ?? '');
+      setAddresses(addressList);
+      setCompanies(companyList);
+      setOrders(orderList);
+    });
+  }, [demo]);
+
+  async function run(action: () => Promise<void>, successMessage = '') {
+    setLoading(true);
+    setError('');
+    setNotice('');
+    try {
+      await action();
+      if (successMessage) setNotice(successMessage);
+      return true;
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Əməliyyat yerinə yetirilmədi.');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadCatalog(pageNumber = 1, nextCategory = categoryId, nextSubcategory = subcategoryName, nextSearch = search) {
+    if (demo) return;
+    setCatalog(await api.getCustomerCatalog(pageNumber, nextCategory, nextSubcategory, nextSearch));
+  }
+
+  async function applyFilters(event?: FormEvent) {
+    event?.preventDefault();
+    await run(() => loadCatalog(1));
+  }
+
+  async function addToCart(product: CustomerCatalogProduct, amount: number) {
+    await run(async () => {
+      const current = cart.items.find(item => item.productId === product.id)?.quantity ?? 0;
+      setCart(demo ? {
+        ...cart,
+        items: [...cart.items.filter(item => item.productId !== product.id), {
+          productId: product.id,
+          productName: product.name,
+          productCode: product.code,
+          unitPrice: product.price,
+          quantity: current + amount,
+          lineTotal: product.price * (current + amount),
+        }],
+        productsTotal: cart.productsTotal + product.price * amount,
+      } : await api.setCustomerCartItem(product.id, current + amount));
+      setSelectedProduct(null);
+      setQuantity(1);
+    }, 'Məhsul səbətə əlavə edildi.');
+  }
+
+  async function changeCartQuantity(productId: string, nextQuantity: number) {
+    await run(async () => {
+      if (nextQuantity <= 0) {
+        setCart(demo
+          ? { ...cart, items: cart.items.filter(item => item.productId !== productId) }
+          : await api.removeCustomerCartItem(productId));
+      } else {
+        setCart(demo
+          ? recalculateCart(cart.items.map(item => item.productId === productId
+            ? { ...item, quantity: nextQuantity, lineTotal: item.unitPrice * nextQuantity }
+            : item), cart)
+          : await api.setCustomerCartItem(productId, nextQuantity));
+      }
+    });
+  }
+
+  function beginCheckout() {
+    setCheckoutPhone(profile?.phoneNumber ?? phone);
+    setAddressId(addresses[0]?.id ?? '');
+    setCompanyId(companies[0]?.id ?? '');
+    setCheckoutOpen(true);
+  }
+
+  async function completeCheckout(event: FormEvent) {
+    event.preventDefault();
+    if (!checkoutPhone.trim() || checkoutPhone.replace(/\D/g, '').length < 9) {
+      setError('Telefon nömrəsini düzgün yazın.');
+      return;
+    }
+    if (!addressId || !companyId) {
+      setError('Ünvan və çatdırılma şirkəti seçilməlidir.');
+      return;
+    }
+
+    const completed = await run(async () => {
+      if (demo) return;
+      if (checkoutPhone.trim() !== profile?.phoneNumber) {
+        await api.updateCustomerPhone(checkoutPhone.trim());
+      }
+      const order = await api.checkoutCustomerOrder(addressId, companyId);
+      setOrders(values => [order, ...values]);
+      setProfile(value => value ? { ...value, phoneNumber: checkoutPhone.trim() } : value);
+      setPhone(checkoutPhone.trim());
+      setCart(await api.getCustomerCart());
+    }, 'Sifarişiniz qəbul edildi.');
+
+    if (completed) {
+      setCheckoutOpen(false);
+      setSection('orders');
+    }
+  }
+
+  async function savePhone(event: FormEvent) {
+    event.preventDefault();
+    await run(async () => {
+      if (!demo) await api.updateCustomerPhone(phone);
+      setProfile(value => value ? { ...value, phoneNumber: phone.trim() } : value);
+    }, 'Telefon nömrəsi yadda saxlanıldı.');
+  }
+
+  async function addAddress(event: FormEvent) {
+    event.preventDefault();
+    if (!newAddress.trim()) return;
+    await run(async () => {
+      const created = demo
+        ? { id: crypto.randomUUID(), addressLine: newAddress.trim(), isActive: true }
+        : await api.createCustomerAddress(newAddress.trim());
+      setAddresses(values => [...values, created]);
+      setNewAddress('');
+    }, 'Ünvan əlavə edildi.');
+  }
+
+  async function removeAddress(address: CustomerAddress) {
+    if (!window.confirm('Bu ünvan silinsin?')) return;
+    await run(async () => {
+      if (!demo) await api.deleteCustomerAddress(address.id);
+      setAddresses(values => values.filter(value => value.id !== address.id));
+    }, 'Ünvan silindi.');
+  }
+
+  async function editAddress(address: CustomerAddress) {
+    const addressLine = window.prompt('Ünvanı dəyişin:', address.addressLine)?.trim();
+    if (!addressLine || addressLine === address.addressLine) return;
+    await run(async () => {
+      const updated = demo
+        ? { ...address, addressLine }
+        : await api.updateCustomerAddress(address.id, addressLine);
+      setAddresses(values => values.map(value => value.id === address.id ? updated : value));
+    }, 'Ünvan yeniləndi.');
+  }
+
+  async function openSection(next: CustomerSection) {
+    setSection(next);
+    if (demo) return;
+    await run(async () => {
+      if (next === 'cart') setCart(await api.getCustomerCart());
+      if (next === 'orders') setOrders(await api.getMyOrders());
+      if (next === 'profile') {
+        const [currentProfile, addressList, companyList] = await Promise.all([
+          api.getCustomerProfile(),
+          api.getCustomerAddresses(),
+          api.getCustomerDeliveryCompanies(),
+        ]);
+        setProfile(currentProfile);
+        setPhone(currentProfile.phoneNumber ?? '');
+        setAddresses(addressList);
+        setCompanies(companyList);
+      }
+    });
+  }
+
+  async function cancelOrder(order: CustomerOrder) {
+    if (!window.confirm(`#${order.orderNumber} sifarişi ləğv edilsin?`)) return;
+    await run(async () => {
+      if (!demo) await api.cancelCustomerOrder(order.orderNumber);
+      const orderList = demo ? orders.map(value => value.orderNumber === order.orderNumber ? { ...value, status: 'Cancelled' as const } : value) : await api.getMyOrders();
+      setOrders(orderList);
+      setSelectedOrder(null);
+    }, 'Sifariş ləğv edildi.');
+  }
+
+  const displayName = [identity?.firstName ?? profile?.firstName, identity?.lastName ?? profile?.lastName]
+    .filter(Boolean)
+    .join(' ');
+
+  return <main className="customer-shell">
+    <header className="customer-header">
+      <div className="customer-brand">S</div>
+      <div><strong>StockMate</strong><span>{displayName || 'Mağaza'}</span></div>
+      <button className="cart-shortcut" onClick={() => void openSection('cart')}>🛒<b>{cart.items.length}</b></button>
+    </header>
+
+    {error && <Message text={error} error close={() => setError('')} />}
+    {notice && <Message text={notice} close={() => setNotice('')} />}
+
+    {section === 'shop' && <section className="customer-screen">
+      <div className="customer-hero"><span>Rahat seçim, sürətli sifariş</span><h1>Məhsullar</h1><p>İstədiyiniz məhsulu seçib səbətə əlavə edin.</p></div>
+      <form className="customer-filters" onSubmit={applyFilters}>
+        <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Məhsul və ya kod axtar" />
+        <div className="customer-filter-row">
+          <select value={categoryId} onChange={event => { setCategoryId(event.target.value); setSubcategoryName(''); }}>
+            <option value="">Bütün markalar</option>
+            {categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+          <select value={subcategoryName} onChange={event => setSubcategoryName(event.target.value)}>
+            <option value="">Bütün ölçülər</option>
+            {visibleSubcategoryNames.map(name => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </div>
+        <div className="customer-filter-actions"><button className="customer-primary" type="submit">Göstər</button><button type="button" onClick={() => { setCategoryId(''); setSubcategoryName(''); setSearch(''); void run(() => loadCatalog(1, '', '', '')); }}>Təmizlə</button></div>
+      </form>
+      <div className="customer-product-grid">
+        {catalog.items.map(product => <article className="customer-product-card" key={product.id} onClick={() => { setSelectedProduct(product); setQuantity(1); }}>
+          {product.imageReference ? <img src={productImageUrl(product.id)} alt={product.name} /> : <div className="customer-product-placeholder">🛍</div>}
+          <div><small>{[product.categoryName, product.subcategoryName].filter(Boolean).join(' · ') || product.code}</small><h2>{product.name}</h2><strong>{money(product.price)}</strong></div>
+          <button aria-label={`${product.name} səbətə əlavə et`} onClick={event => { event.stopPropagation(); void addToCart(product, 1); }}>+</button>
+        </article>)}
+        {!catalog.items.length && <CustomerEmpty text="Uyğun məhsul tapılmadı" />}
+      </div>
+      {catalog.totalPages > 1 && <div className="customer-pagination">
+        <button disabled={catalog.pageNumber <= 1} onClick={() => run(() => loadCatalog(catalog.pageNumber - 1))}>‹</button>
+        <span>{catalog.pageNumber} / {catalog.totalPages}</span>
+        <button disabled={catalog.pageNumber >= catalog.totalPages} onClick={() => run(() => loadCatalog(catalog.pageNumber + 1))}>›</button>
+      </div>}
+    </section>}
+
+    {section === 'cart' && <section className="customer-screen">
+      <div className="customer-page-title"><div><span>Sifarişiniz</span><h1>Səbət</h1></div>{cart.items.length > 0 && <button onClick={() => run(async () => { if (!demo) await api.clearCustomerCart(); setCart(emptyCart); }, 'Səbət təmizləndi.')}>Təmizlə</button>}</div>
+      <div className="customer-list">
+        {cart.items.map(item => <article className="customer-cart-card" key={item.productId}><div><small>{item.productCode}</small><h2>{item.productName}</h2><strong>{money(item.lineTotal)}</strong></div><div className="quantity-control"><button onClick={() => changeCartQuantity(item.productId, item.quantity - 1)}>−</button><b>{item.quantity}</b><button onClick={() => changeCartQuantity(item.productId, item.quantity + 1)}>+</button></div></article>)}
+        {!cart.items.length && <CustomerEmpty text="Səbətiniz boşdur" />}
+      </div>
+      {cart.items.length > 0 && <div className="customer-cart-total"><span>Məhsulların cəmi</span><strong>{money(cart.productsTotal)}</strong><button className="customer-primary" onClick={beginCheckout}>Sifarişi tamamla</button></div>}
+    </section>}
+
+    {section === 'orders' && <section className="customer-screen">
+      <div className="customer-page-title"><div><span>İzləmə və tarixçə</span><h1>Sifarişlərim</h1></div></div>
+      <div className="customer-list">{orders.map(order => <button className="customer-order-card" key={order.orderNumber} onClick={() => setSelectedOrder(order)}><div><small>{formatDate(order.createdAtUtc)}</small><h2>#{order.orderNumber}</h2></div><div><span>{orderLabels[order.status]}</span><strong>{money(order.totalAmount)}</strong></div></button>)}{!orders.length && <CustomerEmpty text="Hələ sifarişiniz yoxdur" />}</div>
+    </section>}
+
+    {section === 'profile' && <section className="customer-screen">
+      <div className="customer-page-title"><div><span>Əlaqə məlumatları</span><h1>Profil</h1></div></div>
+      <form className="customer-panel" onSubmit={savePhone}><label>Telefon nömrəsi<input value={phone} onChange={event => setPhone(event.target.value)} placeholder="+994501234567" /></label><button className="customer-primary">Telefonu yadda saxla</button></form>
+      <form className="customer-panel" onSubmit={addAddress}><h2>Ünvanlarım</h2><div className="customer-addresses">{addresses.map(address => <div key={address.id}><span>📍 {address.addressLine}</span><span className="customer-address-actions"><button type="button" onClick={() => editAddress(address)}>✎</button><button type="button" onClick={() => removeAddress(address)}>×</button></span></div>)}</div><label>Yeni ünvan<textarea value={newAddress} onChange={event => setNewAddress(event.target.value)} placeholder="Küçə, bina, mənzil..." /></label><button className="customer-primary">Ünvan əlavə et</button></form>
+    </section>}
+
+    {selectedProduct && <div className="customer-modal" onClick={() => setSelectedProduct(null)}><div className="customer-sheet" onClick={event => event.stopPropagation()}><button className="customer-close" onClick={() => setSelectedProduct(null)}>×</button>{selectedProduct.imageReference ? <img src={productImageUrl(selectedProduct.id)} alt={selectedProduct.name} /> : <div className="customer-detail-placeholder">🛍</div>}<small>{[selectedProduct.categoryName, selectedProduct.subcategoryName].filter(Boolean).join(' · ')}</small><h2>{selectedProduct.name}</h2><p>{selectedProduct.description}</p><strong className="customer-price">{money(selectedProduct.price)}</strong><div className="customer-add-row"><div className="quantity-control"><button onClick={() => setQuantity(value => Math.max(1, value - 1))}>−</button><b>{quantity}</b><button onClick={() => setQuantity(value => Math.min(99, value + 1))}>+</button></div><button className="customer-primary" onClick={() => addToCart(selectedProduct, quantity)}>Səbətə əlavə et</button></div></div></div>}
+
+    {checkoutOpen && <div className="customer-modal" onClick={() => setCheckoutOpen(false)}><form className="customer-sheet" onClick={event => event.stopPropagation()} onSubmit={completeCheckout}><button type="button" className="customer-close" onClick={() => setCheckoutOpen(false)}>×</button><small>Sifariş məlumatları</small><h2>Təsdiq</h2><label>Telefon nömrəsi<input value={checkoutPhone} onChange={event => setCheckoutPhone(event.target.value)} placeholder="+994501234567" /></label><label>Çatdırılma ünvanı<select value={addressId} onChange={event => setAddressId(event.target.value)}><option value="">Ünvan seçin</option>{addresses.map(address => <option key={address.id} value={address.id}>{address.addressLine}</option>)}</select></label>{!addresses.length && <p className="customer-warning">Əvvəlcə Profil bölməsindən ünvan əlavə edin.</p>}<label>Çatdırılma şirkəti<select value={companyId} onChange={event => setCompanyId(event.target.value)}><option value="">Şirkət seçin</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></label><div className="customer-confirm-summary"><span>Məhsullar <b>{money(cart.productsTotal)}</b></span><small>Çatdırılma haqqını admin müəyyən edəcək.</small></div><button className="customer-primary" disabled={!addresses.length || !companies.length}>Sifarişi təsdiqlə</button></form></div>}
+
+    {selectedOrder && <div className="customer-modal" onClick={() => setSelectedOrder(null)}><div className="customer-sheet" onClick={event => event.stopPropagation()}><button className="customer-close" onClick={() => setSelectedOrder(null)}>×</button><small>{formatDate(selectedOrder.createdAtUtc)}</small><h2>Sifariş #{selectedOrder.orderNumber}</h2><span className="customer-order-status">{orderLabels[selectedOrder.status]}</span><div className="customer-order-items">{selectedOrder.items.map(item => <div key={item.productId}><span><b>{item.quantity} ×</b> {item.productName}</span><strong>{money(item.lineTotal)}</strong></div>)}</div><div className="customer-order-meta"><p>📞 {selectedOrder.phoneNumber}</p><p>📍 {selectedOrder.deliveryAddress}</p><p>🚚 {selectedOrder.deliveryCompanyName ?? '—'}</p></div><div className="customer-confirm-summary"><span>Məhsullar <b>{money(selectedOrder.productsTotal)}</b></span>{selectedOrder.deliveryFee !== undefined && <span>Çatdırılma <b>{money(selectedOrder.deliveryFee)}</b></span>}<span>Cəmi <b>{money(selectedOrder.totalAmount)}</b></span></div>{selectedOrder.status === 'PendingAdminApproval' && <button className="customer-danger" onClick={() => cancelOrder(selectedOrder)}>Sifarişi ləğv et</button>}</div></div>}
+
+    <nav className="customer-nav">
+      <NavButton active={section === 'shop'} icon="⌂" text="Mağaza" onClick={() => void openSection('shop')} />
+      <NavButton active={section === 'cart'} icon="🛒" text="Səbət" badge={cart.items.length} onClick={() => void openSection('cart')} />
+      <NavButton active={section === 'orders'} icon="▣" text="Sifarişlər" onClick={() => void openSection('orders')} />
+      <NavButton active={section === 'profile'} icon="♙" text="Profil" onClick={() => void openSection('profile')} />
+    </nav>
+    {loading && <div className="customer-busy"><span /></div>}
+  </main>;
+}
+
+function recalculateCart(items: CustomerCart['items'], cart: CustomerCart): CustomerCart {
+  return { ...cart, items, productsTotal: items.reduce((sum, item) => sum + item.lineTotal, 0) };
+}
+
+function NavButton({ active, icon, text, badge, onClick }: { active: boolean; icon: string; text: string; badge?: number; onClick: () => void }) {
+  return <button className={active ? 'active' : ''} onClick={onClick}><span>{icon}{badge ? <b>{badge}</b> : null}</span><small>{text}</small></button>;
+}
+
+function Message({ text, error = false, close }: { text: string; error?: boolean; close: () => void }) {
+  return <div className={`customer-message ${error ? 'error' : ''}`}><span>{text}</span><button onClick={close}>×</button></div>;
+}
+
+function CustomerEmpty({ text }: { text: string }) {
+  return <div className="customer-empty"><span>🛍</span><strong>{text}</strong></div>;
+}

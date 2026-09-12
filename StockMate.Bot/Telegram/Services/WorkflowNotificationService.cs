@@ -30,6 +30,30 @@ public class WorkflowNotificationService : IWorkflowNotificationService
         _logger = logger;
     }
 
+    public async Task NotifyOrderCreatedAsync(
+        long orderNumber,
+        CancellationToken cancellationToken = default)
+    {
+        if (_options.AdminUserId <= 0)
+            return;
+
+        var order = await _orderService.GetByOrderNumberAsync(
+            orderNumber,
+            cancellationToken)
+            ?? throw new KeyNotFoundException("Order was not found.");
+        var customer = await _customerService.GetByIdAsync(
+            order.CustomerId,
+            cancellationToken)
+            ?? throw new KeyNotFoundException("Customer was not found.");
+
+        await SafeSendAsync(
+            _options.AdminUserId,
+            $"🆕 Yeni sifariş #{orderNumber}\n" +
+            $"Müştəri: {GetCustomerName(customer.FirstName, customer.LastName)}\n" +
+            $"Məbləğ: {order.ProductsTotal:0.00} AZN",
+            cancellationToken);
+    }
+
     public async Task NotifyOrderConfirmedAsync(
         long orderNumber,
         CancellationToken cancellationToken = default)

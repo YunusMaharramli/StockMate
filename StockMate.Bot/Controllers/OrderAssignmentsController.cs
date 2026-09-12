@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using StockMate.Application.Staff.Services;
 using StockMate.Bot.Security;
-using StockMate.Domain.Enums;
+using StockMate.Bot.Security.Models;
 
 namespace StockMate.Bot.Controllers;
 
@@ -9,63 +9,55 @@ namespace StockMate.Bot.Controllers;
 [Route("api/miniapp")]
 public class OrderAssignmentsController : ControllerBase
 {
-    private readonly IMiniAppIdentityService _identity;
     private readonly IOrderAssignmentService _assignmentService;
 
-    public OrderAssignmentsController(
-        IMiniAppIdentityService identity,
-        IOrderAssignmentService assignmentService)
+    public OrderAssignmentsController(IOrderAssignmentService assignmentService)
     {
-        _identity = identity;
         _assignmentService = assignmentService;
     }
 
     [HttpPost("admin/orders/{orderNumber:long}/assign")]
+    [MiniAppAuthorize(MiniAppUserRole.Admin)]
     public async Task<IActionResult> Assign(
         long orderNumber,
         [FromBody] AssignOrderRequest request,
         CancellationToken cancellationToken)
     {
-        var admin = await _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
+        var admin = MiniAppAuthorizationFilter.GetIdentity(HttpContext);
         return Ok(await _assignmentService.AssignAsync(
-            orderNumber, request.WorkerId, admin.Id, cancellationToken));
+            orderNumber, request.WorkerId, admin.StaffId!.Value, cancellationToken));
     }
 
     [HttpGet("worker/assignments")]
+    [MiniAppAuthorize(MiniAppUserRole.Worker)]
     public async Task<IActionResult> GetMine(CancellationToken cancellationToken)
     {
-        var worker = await _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Worker,
-            cancellationToken);
-        return Ok(await _assignmentService.GetWorkerAssignmentsAsync(worker.Id, cancellationToken));
+        var worker = MiniAppAuthorizationFilter.GetIdentity(HttpContext);
+        return Ok(await _assignmentService.GetWorkerAssignmentsAsync(
+            worker.StaffId!.Value,
+            cancellationToken));
     }
 
     [HttpGet("admin/orders/{orderNumber:long}/assignment")]
+    [MiniAppAuthorize(MiniAppUserRole.Admin)]
     public async Task<IActionResult> GetForOrder(
         long orderNumber,
         CancellationToken cancellationToken)
     {
-        await _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
         return Ok(await _assignmentService.GetOrderAssignmentAsync(orderNumber, cancellationToken));
     }
 
     [HttpDelete("admin/orders/{orderNumber:long}/assignment")]
+    [MiniAppAuthorize(MiniAppUserRole.Admin)]
     public async Task<IActionResult> Release(
         long orderNumber,
         CancellationToken cancellationToken)
     {
-        var admin = await _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
+        var admin = MiniAppAuthorizationFilter.GetIdentity(HttpContext);
+        await _assignmentService.ReleaseAsync(
+            orderNumber,
+            admin.StaffId!.Value,
             cancellationToken);
-        await _assignmentService.ReleaseAsync(orderNumber, admin.Id, cancellationToken);
         return NoContent();
     }
 }

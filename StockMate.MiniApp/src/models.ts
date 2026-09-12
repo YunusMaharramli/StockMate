@@ -5,6 +5,17 @@ export type DeliveryMode = 'Undecided' | 'AllTogether' | 'PartialAllowed';
 export type FulfillmentStatus = 'Waiting' | 'PartiallyDelivered' | 'FullyDelivered' | 'ClosedWithShortage';
 export type SpecialOrderStatus = 'NotRequired' | 'Pending' | 'OrderedFromSupplier' | 'Arrived' | 'Completed' | 'Cancelled';
 export type StockAction = 'add' | 'remove' | 'set';
+export type MiniAppUserRole = 'Admin' | 'Worker' | 'Customer';
+
+export interface MiniAppIdentity {
+  telegramUserId: number;
+  role: MiniAppUserRole;
+  staffId?: string;
+  customerId?: string;
+  firstName: string;
+  lastName?: string;
+  username?: string;
+}
 
 export interface Staff {
   id: string;
@@ -131,6 +142,76 @@ export interface PagedResult<T> {
   pageSize: number;
   totalItems: number;
   totalPages: number;
+}
+
+export interface CustomerCatalogProduct {
+  id: string;
+  name: string;
+  code: string;
+  price: number;
+  description: string;
+  imageReference?: string;
+  categoryId?: string;
+  categoryName?: string;
+  subcategoryId?: string;
+  subcategoryName?: string;
+}
+
+export interface CustomerCartItem {
+  productId: string;
+  productName: string;
+  productCode: string;
+  unitPrice: number;
+  quantity: number;
+  lineTotal: number;
+}
+
+export interface CustomerCart {
+  id: string;
+  items: CustomerCartItem[];
+  productsTotal: number;
+  expiresAtUtc: string;
+}
+
+export interface CustomerProfile {
+  firstName: string;
+  lastName?: string;
+  username?: string;
+  phoneNumber?: string;
+}
+
+export interface CustomerAddress {
+  id: string;
+  addressLine: string;
+  latitude?: number;
+  longitude?: number;
+  isActive: boolean;
+}
+
+export interface CustomerOrderItem {
+  productId: string;
+  productName: string;
+  productCode: string;
+  unitPrice: number;
+  quantity: number;
+  lineTotal: number;
+}
+
+export interface CustomerOrder {
+  orderNumber: number;
+  phoneNumber: string;
+  deliveryAddress: string;
+  deliveryCompanyName?: string;
+  status: OrderStatus;
+  items: CustomerOrderItem[];
+  productsTotal: number;
+  deliveryFee?: number;
+  totalAmount: number;
+  cancellationReason?: string;
+  createdAtUtc: string;
+  confirmedAtUtc?: string;
+  completedAtUtc?: string;
+  cancelledAtUtc?: string;
 }
 
 export interface Customer {

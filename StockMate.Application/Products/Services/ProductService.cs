@@ -121,7 +121,7 @@ public class ProductService : IProductService
             totalItems);
     }
 
-    public async Task<PagedResult<ProductDto>> GetCatalogPageAsync(
+    public async Task<PagedResult<ProductCatalogItemDto>> GetCatalogPageAsync(
         ProductCatalogQuery query,
         CancellationToken cancellationToken = default)
     {
@@ -135,11 +135,24 @@ public class ProductService : IProductService
             query,
             cancellationToken);
 
-        return new PagedResult<ProductDto>(
-            products.Select(MapProduct).ToList(),
+        return new PagedResult<ProductCatalogItemDto>(
+            products.Select(MapCatalogProduct).ToList(),
             query.PageNumber,
             query.PageSize,
             totalItems);
+    }
+
+    public async Task<ProductCatalogItemDto?> GetCatalogProductByIdAsync(
+        Guid productId,
+        CancellationToken cancellationToken = default)
+    {
+        var product = await _productRepository.GetByIdAsync(
+            productId,
+            cancellationToken);
+
+        return product is null || !product.IsCatalogVisible
+            ? null
+            : MapCatalogProduct(product);
     }
 
     public async Task ChangePriceAsync(
@@ -293,6 +306,21 @@ public class ProductService : IProductService
             product.MinimumStockQuantity,
             product.StockQuantity <= product.MinimumStockQuantity,
             product.IsCatalogVisible);
+    }
+
+    private static ProductCatalogItemDto MapCatalogProduct(Product product)
+    {
+        return new ProductCatalogItemDto(
+            product.Id,
+            product.Name,
+            product.Code,
+            product.Price,
+            product.Description,
+            product.ImageReference,
+            product.CategoryId,
+            product.Category?.Name,
+            product.SubcategoryId,
+            product.Subcategory?.Name);
     }
 
     public async Task UpdateDetailsAsync(

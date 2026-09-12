@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api, productImageUrl } from './client';
+import CustomerApp from './CustomerApp';
 import type {
   Assignment,
   Category,
@@ -10,6 +11,7 @@ import type {
   InventoryTurnoverReport,
   MissingProduct,
   MissingProductOrder,
+  MiniAppIdentity,
   Order,
   OrderItem,
   OrderStatus,
@@ -102,7 +104,7 @@ function filterOrder(order: Order, filter: OrderFilter) {
 }
 
 export default function AdminApp() {
-  const [identity, setIdentity] = useState<Staff | null>(null);
+  const [identity, setIdentity] = useState<MiniAppIdentity | null>(null);
   const [demo, setDemo] = useState(false);
   const [section, setSection] = useState<Section>('home');
   const [orders, setOrders] = useState<Order[]>(demoOrders);
@@ -124,18 +126,45 @@ export default function AdminApp() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const demoWorker = new URLSearchParams(window.location.search).get('role') === 'worker';
+  const demoRole = new URLSearchParams(window.location.search).get('role');
+  const demoWorker = demoRole === 'worker';
+  const demoCustomer = demoRole === 'customer';
   const isWorker = identity?.role === 'Worker' || (demo && demoWorker);
+  const isCustomer = identity?.role === 'Customer' || (demo && demoCustomer);
 
   useEffect(() => {
     const webApp = window.Telegram?.WebApp;
+    const handleAccessDenied = (event: Event) => {
+      const message = event instanceof CustomEvent && typeof event.detail === 'string'
+        ? event.detail
+        : 'İcazəniz yoxdur.';
+
+      setIdentity(null);
+      setError(message);
+      setLoading(false);
+    };
+
+    window.addEventListener(
+      'stockmate:access-denied',
+      handleAccessDenied,
+    );
+
     webApp?.ready();
     webApp?.expand();
     if (webApp) document.documentElement.dataset.telegramTheme = webApp.colorScheme;
     if (!webApp?.initData) {
-      setDemo(true);
+      if (import.meta.env.DEV) {
+        setDemo(true);
+      } else {
+        setError(
+          'İcazəniz yoxdur. Mini App-ı Telegram botundakı düymədən açın.',
+        );
+      }
       setLoading(false);
-      return;
+      return () => window.removeEventListener(
+        'stockmate:access-denied',
+        handleAccessDenied,
+      );
     }
     api.authenticate()
       .then(async user => {
@@ -148,7 +177,7 @@ export default function AdminApp() {
           setWorkerAssignments(assigned);
           setWorkerShipments(deliveries);
         }
-        else {
+        else if (user.role === 'Admin') {
           const [newOrders, activeOrders, history, people, customerList] = await Promise.all([api.getNewOrders(), api.getActiveOrders(), api.getOrderHistory(), api.getStaff(), api.getCustomers()]);
           setOrders([...newOrders, ...activeOrders, ...history]);
           setStaff(people);
@@ -157,6 +186,11 @@ export default function AdminApp() {
       })
       .catch(reason => setError(reason instanceof Error ? reason.message : 'Giriş alınmadı.'))
       .finally(() => setLoading(false));
+
+    return () => window.removeEventListener(
+      'stockmate:access-denied',
+      handleAccessDenied,
+    );
   }, []);
 
   useEffect(() => {
@@ -368,6 +402,7 @@ export default function AdminApp() {
 
   if (loading && !demo && !identity) return <Startup />;
   if (error && !demo && !identity) return <Startup error={error} />;
+  if (isCustomer) return <CustomerApp identity={identity} demo={demo} />;
   if (isWorker) return <WorkerPanel assignments={workerAssignments} shipments={workerShipments} loading={loading} demo={demo} error={error} onRefresh={() => run(async () => {
     if (demo) return;
     const [assigned, deliveries] = await Promise.all([api.getWorkerAssignments(), api.getWorkerShipments()]);
@@ -406,7 +441,7 @@ export default function AdminApp() {
       if (!demo) await api.changeStock(product.id, action, quantity, reason);
       setProducts(items => items.map(item => item.id === product.id ? { ...item, stockQuantity: action === 'set' ? quantity : item.stockQuantity + (action === 'add' ? quantity : -quantity) } : item));
     }, 'Stok yeniləndi.')} history={async product => demo ? [] : api.getStockHistory(product.id)} />}
-    {section === 'shortages' && <ShortagesScreen items={shortages} demo={demo} back={() => openSection('home')} loadOrders={productId => demo ? Promise.resolve([]) : api.getShortageOrders(productId)} openOrderNumber={async number => {
+    {section === 'shortages' && <ShortagesScreen items={shortages} demo={demo} back={() => openSection('home')} loadOrders={productId => demo ? Promise.resolve([]) : api.getShortageOrders(productId)} exportExcel={() => demo ? Promise.resolve() : api.exportShortages()} openOrderNumber={async number => {
       const order = demo ? orders.find(item => item.orderNumber === number) : await api.getOrder(number);
       if (order) { setSection('orders'); await openOrder(order); }
     }} notify={message => setNotice(message)} />}
@@ -721,24 +756,123 @@ function StockScreen({ products, demo, back, change, history }: { products: Prod
   return <section className="screen"><Heading title="Stok" back={back} /><div className="list">{products.map(product => <button className="list-card" key={product.id} onClick={() => open(product)}><div className="row"><strong>{product.name}</strong><Status value={product.stockQuantity === 0 ? 'Yoxdur' : product.stockQuantity < 5 ? 'Az qalıb' : 'Normal'} tone={product.stockQuantity < 5 ? 'warning' : 'success'} /></div><div className="row meta"><span>{product.code}</span><b>{product.stockQuantity} ədəd</b></div></button>)}</div>{selected && <div className="modal"><div className="sheet"><div className="sheet-title"><div><small>Stok idarəsi</small><h2>{selected.name}</h2></div><button onClick={() => setSelected(null)}>×</button></div><div className="stock-now">Hazırda <strong>{selected.stockQuantity}</strong> ədəd</div><label>Miqdar<input type="number" min="0" value={quantity} onChange={event => setQuantity(event.target.value)} /></label><label>Səbəb<input value={reason} onChange={event => setReason(event.target.value)} /></label><div className="button-grid"><button onClick={() => apply('add')}>＋ Əlavə et</button><button onClick={() => apply('remove')}>− Çıx</button><button onClick={() => apply('set')}>Dəqiq təyin et</button></div><h3>Son hərəkətlər</h3>{movements.length ? <div className="movement-list">{movements.slice(0, 8).map(item => <div key={item.id}><span>{item.reason}</span><b className={item.quantityChange >= 0 ? 'positive' : 'negative'}>{item.quantityChange > 0 ? '+' : ''}{item.quantityChange}</b><small>{date(item.createdAtUtc)}</small></div>)}</div> : <p className="hint">{demo ? 'Demo tarixçəsi yoxdur.' : 'Stok hərəkəti yoxdur.'}</p>}</div></div>}</section>;
 }
 
-function ShortagesScreen({ items, demo, back, loadOrders, openOrderNumber, notify }: { items: MissingProduct[]; demo: boolean; back: () => void; loadOrders: (productId: string) => Promise<MissingProductOrder[]>; openOrderNumber: (number: number) => Promise<void>; notify: (message: string) => void }) {
+function ShortagesScreen({
+  items,
+  demo,
+  back,
+  loadOrders,
+  exportExcel,
+  openOrderNumber,
+  notify,
+}: {
+  items: MissingProduct[];
+  demo: boolean;
+  back: () => void;
+  loadOrders: (productId: string) => Promise<MissingProductOrder[]>;
+  exportExcel: () => Promise<void>;
+  openOrderNumber: (number: number) => Promise<void>;
+  notify: (message: string) => void;
+}) {
   const [selected, setSelected] = useState<MissingProduct | null>(null);
   const [affected, setAffected] = useState<MissingProductOrder[]>([]);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [localError, setLocalError] = useState('');
-  const copyText = items.map(item => `${item.productName} (${item.productCode}) — ${item.missingQuantity} ədəd`).join('\n');
+  const copyText = items
+    .map(item => `${item.productName} (${item.productCode}) — ${item.missingQuantity} ədəd`)
+    .join('\n');
+
   async function open(item: MissingProduct) {
-    setSelected(item); setBusy(true); setLocalError('');
-    try { setAffected(await loadOrders(item.productId)); }
-    catch (reason) { setLocalError(reason instanceof Error ? reason.message : 'Detallar açıla bilmədi.'); }
-    finally { setBusy(false); }
+    setSelected(item);
+    setBusy(true);
+    setLocalError('');
+
+    try {
+      setAffected(await loadOrders(item.productId));
+    } catch (reason) {
+      setLocalError(reason instanceof Error ? reason.message : 'Detallar açıla bilmədi.');
+    } finally {
+      setBusy(false);
+    }
   }
+
   async function copy() {
     if (!copyText) return;
-    try { await navigator.clipboard.writeText(copyText); notify('Çatışmazlıq siyahısı kopyalandı.'); }
-    catch { setLocalError('Siyahını kopyalamaq mümkün olmadı.'); }
+
+    try {
+      await navigator.clipboard.writeText(copyText);
+      notify('Çatışmazlıq siyahısı kopyalandı.');
+    } catch {
+      setLocalError('Siyahını kopyalamaq mümkün olmadı.');
+    }
   }
-  return <section className="screen"><Heading title="Çatışmazlıqlar" back={back} action={<button className="heading-action" disabled={!items.length} onClick={copy}>Kopyala</button>} />{demo && <p className="hint">Demo rejimində real çatışmazlıq yoxdur.</p>}{localError && <p className="danger-text">{localError}</p>}<div className="list">{items.map(item => <button className="list-card" key={item.productId} onClick={() => open(item)}><div className="row"><strong>{item.productName}</strong><Status value={`${item.missingQuantity} ədəd`} tone="warning" /></div><div className="row meta"><span>{item.productCode}</span><b>{item.affectedOrderCount} sifariş</b></div></button>)}{!items.length && <Empty text="Hazırda çatışmayan məhsul yoxdur" />}</div>{selected && <div className="modal"><div className="sheet"><div className="sheet-title"><div><small>Çatışmayan məhsul</small><h2>{selected.productName}</h2></div><button onClick={() => setSelected(null)}>×</button></div><div className="stock-now">Cəmi <strong>{selected.missingQuantity}</strong> ədəd çatmır</div>{busy ? <span className="spinner" /> : <div className="list">{affected.map(order => <button className="list-card" key={order.orderNumber} onClick={() => openOrderNumber(order.orderNumber)}><div className="row"><strong>#{order.orderNumber}</strong><Status value={`${order.missingQuantity} ədəd`} tone="warning" /></div><h3>{order.customerName}</h3><small>{specialLabels[order.status]}</small></button>)}{!affected.length && <Empty text="Əlaqəli sifariş yoxdur" />}</div>}</div></div>}</section>;
+
+  async function exportList() {
+    if (!items.length || demo) return;
+
+    setExporting(true);
+    setLocalError('');
+
+    try {
+      await exportExcel();
+      notify('Excel faylı endirildi.');
+    } catch (reason) {
+      setLocalError(reason instanceof Error
+        ? reason.message
+        : 'Excel faylını endirmək mümkün olmadı.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  return <section className="screen">
+    <Heading title="Çatışmazlıqlar" back={back} />
+    <div className="button-grid">
+      <button disabled={!items.length} onClick={copy}>Kopyala</button>
+      <button
+        className="primary"
+        disabled={!items.length || demo || exporting}
+        onClick={exportList}
+      >
+        {exporting ? 'Hazırlanır…' : 'Excel-ə export et'}
+      </button>
+    </div>
+    {demo && <p className="hint">Demo rejimində real çatışmazlıq yoxdur.</p>}
+    {localError && <p className="danger-text">{localError}</p>}
+    <div className="list">
+      {items.map(item => <button className="list-card" key={item.productId} onClick={() => open(item)}>
+        <div className="row">
+          <strong>{item.productName}</strong>
+          <Status value={`${item.missingQuantity} ədəd`} tone="warning" />
+        </div>
+        <div className="row meta">
+          <span>{item.productCode}</span>
+          <b>{item.affectedOrderCount} sifariş</b>
+        </div>
+      </button>)}
+      {!items.length && <Empty text="Hazırda çatışmayan məhsul yoxdur" />}
+    </div>
+    {selected && <div className="modal"><div className="sheet">
+      <div className="sheet-title">
+        <div><small>Çatışmayan məhsul</small><h2>{selected.productName}</h2></div>
+        <button onClick={() => setSelected(null)}>×</button>
+      </div>
+      <div className="stock-now">Cəmi <strong>{selected.missingQuantity}</strong> ədəd çatmır</div>
+      {busy
+        ? <span className="spinner" />
+        : <div className="list">
+          {affected.map(order => <button className="list-card" key={order.orderNumber} onClick={() => openOrderNumber(order.orderNumber)}>
+            <div className="row">
+              <strong>#{order.orderNumber}</strong>
+              <Status value={`${order.missingQuantity} ədəd`} tone="warning" />
+            </div>
+            <h3>{order.customerName}</h3>
+            <small>{specialLabels[order.status]}</small>
+          </button>)}
+          {!affected.length && <Empty text="Əlaqəli sifariş yoxdur" />}
+        </div>}
+    </div></div>}
+  </section>;
 }
 
 function StockPurchasesScreen({ items, products, demo, back, search, create }: { items: StockPurchase[]; products: Product[]; demo: boolean; back: () => void; search: (from: string, to: string) => Promise<unknown>; create: (purchasedAtUtc: string, note: string, items: CreateStockPurchaseItem[]) => Promise<boolean> }) {

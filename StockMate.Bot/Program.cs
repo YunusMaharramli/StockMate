@@ -18,8 +18,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
+builder.Services.AddScoped<MiniAppAuthorizationFilter>();
+
 builder.Services
-    .AddControllers()
+    .AddControllers(options =>
+    {
+        options.Filters.AddService<MiniAppAuthorizationFilter>();
+    })
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(
@@ -87,7 +92,10 @@ builder.Services.AddSingleton<TelegramBotClient>(
 builder.Services.AddScoped<TelegramUpdateHandler>();
 builder.Services.AddHostedService<TelegramPollingService>();
 builder.Services.AddSingleton<TelegramSessionStore>();
-builder.Services.AddScoped<IWorkflowNotificationService, WorkflowNotificationService>();
+builder.Services.AddSingleton<IMiniAppMenuButtonService, MiniAppMenuButtonService>();
+builder.Services.AddScoped<IUserAccessChangedNotifier, UserAccessChangedNotifier>();
+builder.Services.AddScoped<IWorkflowNotificationService,WorkflowNotificationService>();
+builder.Services.AddSingleton<ITelegramInitDataValidator, TelegramInitDataValidator>();
 builder.Services.AddScoped<IMiniAppIdentityService, TelegramMiniAppIdentityService>();
 
 var app = builder.Build();

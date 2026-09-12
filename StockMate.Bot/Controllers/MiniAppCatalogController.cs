@@ -2,26 +2,24 @@ using Microsoft.AspNetCore.Mvc;
 using StockMate.Application.Customers.Services;
 using StockMate.Application.Products.Models;
 using StockMate.Application.Products.Services;
-using StockMate.Application.Staff.Models;
 using StockMate.Bot.Security;
+using StockMate.Bot.Security.Models;
 using StockMate.Domain.Enums;
 
 namespace StockMate.Bot.Controllers;
 
 [ApiController]
 [Route("api/miniapp/admin")]
+[MiniAppAuthorize(MiniAppUserRole.Admin)]
 public class MiniAppCatalogController : ControllerBase
 {
-    private readonly IMiniAppIdentityService _identity;
     private readonly IProductService _productService;
     private readonly ICustomerService _customerService;
 
     public MiniAppCatalogController(
-        IMiniAppIdentityService identity,
         IProductService productService,
         ICustomerService customerService)
     {
-        _identity = identity;
         _productService = productService;
         _customerService = customerService;
     }
@@ -39,7 +37,6 @@ public class MiniAppCatalogController : ControllerBase
         [FromQuery] bool includeArchived = false,
         CancellationToken cancellationToken = default)
     {
-        await RequireAdminAsync(cancellationToken);
         return Ok(await _productService.GetAdminPageAsync(
             new AdminProductQuery(
                 pageNumber,
@@ -59,7 +56,6 @@ public class MiniAppCatalogController : ControllerBase
         [FromBody] CreateProductRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
 
         if (!request.CategoryId.HasValue)
             throw new ArgumentException("Category ID is required.", nameof(request));
@@ -74,7 +70,6 @@ public class MiniAppCatalogController : ControllerBase
         [FromBody] UpdateProductRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _productService.UpdateDetailsAsync(productId, request, cancellationToken);
         return NoContent();
     }
@@ -85,7 +80,6 @@ public class MiniAppCatalogController : ControllerBase
         [FromBody] MiniAppPriceRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _productService.ChangePriceAsync(productId, request.Price, cancellationToken);
         return NoContent();
     }
@@ -96,7 +90,6 @@ public class MiniAppCatalogController : ControllerBase
         [FromBody] MiniAppActiveRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         if (request.IsActive)
             await _productService.ActivateAsync(productId, cancellationToken);
         else
@@ -110,7 +103,6 @@ public class MiniAppCatalogController : ControllerBase
         [FromBody] MiniAppStockRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         switch (request.Action.Trim().ToLowerInvariant())
         {
             case "add":
@@ -133,7 +125,6 @@ public class MiniAppCatalogController : ControllerBase
         Guid productId,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         return Ok(await _productService.GetStockHistoryAsync(productId, cancellationToken));
     }
 
@@ -142,7 +133,6 @@ public class MiniAppCatalogController : ControllerBase
         Guid productId,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _productService.ArchiveAsync(productId, cancellationToken);
         return NoContent();
     }
@@ -152,7 +142,6 @@ public class MiniAppCatalogController : ControllerBase
         Guid productId,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _productService.RestoreAsync(productId, cancellationToken);
         return NoContent();
     }
@@ -162,7 +151,6 @@ public class MiniAppCatalogController : ControllerBase
         Guid productId,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _productService.DeleteAsync(productId, cancellationToken);
         return NoContent();
     }
@@ -172,7 +160,6 @@ public class MiniAppCatalogController : ControllerBase
         [FromBody] BulkProductActionRequest request,
         CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         await _productService.ApplyBulkActionAsync(request, cancellationToken);
         return NoContent();
     }
@@ -180,15 +167,9 @@ public class MiniAppCatalogController : ControllerBase
     [HttpGet("customers")]
     public async Task<IActionResult> GetCustomers(CancellationToken cancellationToken)
     {
-        await RequireAdminAsync(cancellationToken);
         return Ok(await _customerService.GetAllAsync(cancellationToken));
     }
 
-    private Task<StaffDto> RequireAdminAsync(CancellationToken cancellationToken)
-        => _identity.RequireAsync(
-            Request.Headers["X-Telegram-Init-Data"].ToString(),
-            StaffRole.Admin,
-            cancellationToken);
 }
 
 public sealed record MiniAppPriceRequest(decimal Price);
