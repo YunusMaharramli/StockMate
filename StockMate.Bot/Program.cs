@@ -87,11 +87,7 @@ builder.Services.AddSingleton<TelegramBotClient>(
                 "in appsettings.Development.json or Telegram__AdminUserId in the environment.");
         }
 
-        var client = new TelegramBotClient(options.BotToken);
-        client.OnMakingApiRequest +=
-            TelegramContentProtection.ApplyAsync;
-
-        return client;
+        return new ProtectedTelegramBotClient(options.BotToken);
     });
 
 builder.Services.AddScoped<TelegramUpdateHandler>();

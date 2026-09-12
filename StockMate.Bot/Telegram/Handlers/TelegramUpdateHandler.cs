@@ -16,7 +16,6 @@ using StockMate.Application.Staff.Services;
 using StockMate.Application.Subcategories.Services;
 using StockMate.Application.TelegramInvites.Services;
 using StockMate.Bot.Options;
-using StockMate.Bot.Security.Models;
 using StockMate.Bot.Telegram.Services;
 using StockMate.Bot.Telegram.State;
 using StockMate.Domain.Enums;
@@ -1533,7 +1532,7 @@ public class TelegramUpdateHandler
                 user.LastName,
                 user.Username);
 
-            await _miniAppMenuButtonService.SetAsync(user.Id, MiniAppUserRole.Admin);
+            await _miniAppMenuButtonService.ResetAsync(user.Id);
             await SendAdminMainMenuAsync(message.Chat.Id);
             return;
         }
@@ -1550,7 +1549,7 @@ public class TelegramUpdateHandler
                 return;
             }
 
-            await _miniAppMenuButtonService.SetAsync(user.Id, MiniAppUserRole.Worker);
+            await _miniAppMenuButtonService.ResetAsync(user.Id);
             if (string.IsNullOrWhiteSpace(_telegramOptions.MiniAppUrl))
             {
                 await _botClient.SendMessage(
@@ -1561,7 +1560,9 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "Tapşırıqlarınızı mesaj sətrinin yanındakı “📦 Tapşırıqlar” düyməsindən idarə edin.");
+                "Tapşırıqlarınızı aşağıdakı düymədən idarə edin.",
+                replyMarkup: BuildMiniAppKeyboard(
+                    "📦 Tapşırıqları aç"));
             return;
         }
 
@@ -1593,7 +1594,7 @@ public class TelegramUpdateHandler
 
         _sessionStore.Clear(user.Id);
 
-        await _miniAppMenuButtonService.SetAsync(user.Id, MiniAppUserRole.Customer);
+        await _miniAppMenuButtonService.ResetAsync(user.Id);
         await SendCustomerMainMenuAsync(message.Chat.Id);
     }
     private async Task SendProductsPageAsync(
@@ -3324,7 +3325,9 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Mini App-ı mesaj sətrinin yanındakı “📱 Panel” düyməsindən aça bilərsiniz.");
+                "Mini App-ı aşağıdakı düymədən aça bilərsiniz.",
+                replyMarkup: BuildMiniAppKeyboard(
+                    "📱 Paneli aç"));
         }
     }
 

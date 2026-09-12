@@ -1,5 +1,4 @@
-using Telegram.Bot;
-using Telegram.Bot.Args;
+using Telegram.Bot.Requests.Abstractions;
 
 namespace StockMate.Bot.Telegram.Services;
 
@@ -8,12 +7,10 @@ internal static class TelegramContentProtection
     private const string ProtectContentPropertyName =
         "ProtectContent";
 
-    public static ValueTask ApplyAsync(
-        ITelegramBotClient botClient,
-        ApiRequestEventArgs args,
-        CancellationToken cancellationToken)
+    public static void Apply<TResponse>(
+        IRequest<TResponse> request)
     {
-        var property = args.Request
+        var property = request
             .GetType()
             .GetProperty(ProtectContentPropertyName);
 
@@ -24,9 +21,7 @@ internal static class TelegramContentProtection
             } &&
             property.PropertyType == typeof(bool))
         {
-            property.SetValue(args.Request, true);
+            property.SetValue(request, true);
         }
-
-        return ValueTask.CompletedTask;
     }
 }
