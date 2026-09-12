@@ -16,6 +16,7 @@ using StockMate.Application.Staff.Services;
 using StockMate.Application.Subcategories.Services;
 using StockMate.Application.TelegramInvites.Services;
 using StockMate.Bot.Options;
+using StockMate.Bot.Security.Models;
 using StockMate.Bot.Telegram.Services;
 using StockMate.Bot.Telegram.State;
 using StockMate.Domain.Enums;
@@ -1532,7 +1533,9 @@ public class TelegramUpdateHandler
                 user.LastName,
                 user.Username);
 
-            await _miniAppMenuButtonService.ResetAsync(user.Id);
+            await _miniAppMenuButtonService.SetAsync(
+                user.Id,
+                MiniAppUserRole.Admin);
             await SendAdminMainMenuAsync(message.Chat.Id);
             return;
         }
@@ -1549,7 +1552,9 @@ public class TelegramUpdateHandler
                 return;
             }
 
-            await _miniAppMenuButtonService.ResetAsync(user.Id);
+            await _miniAppMenuButtonService.SetAsync(
+                user.Id,
+                MiniAppUserRole.Worker);
             if (string.IsNullOrWhiteSpace(_telegramOptions.MiniAppUrl))
             {
                 await _botClient.SendMessage(
@@ -1560,9 +1565,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "Tapşırıqlarınızı aşağıdakı düymədən idarə edin.",
-                replyMarkup: BuildMiniAppKeyboard(
-                    "📦 Tapşırıqları aç"));
+                "Tapşırıqlarınızı mesaj sətrinin yanındakı “📦 Tapşırıqlar” düyməsindən idarə edin.");
             return;
         }
 
@@ -1594,7 +1597,9 @@ public class TelegramUpdateHandler
 
         _sessionStore.Clear(user.Id);
 
-        await _miniAppMenuButtonService.ResetAsync(user.Id);
+        await _miniAppMenuButtonService.SetAsync(
+            user.Id,
+            MiniAppUserRole.Customer);
         await SendCustomerMainMenuAsync(message.Chat.Id);
     }
     private async Task SendProductsPageAsync(
@@ -3217,8 +3222,9 @@ public class TelegramUpdateHandler
     }
     private async Task SendCustomerMainMenuAsync(long chatId)
     {
-        var rows = new List<InlineKeyboardButton[]>
-        {
+        var keyboard = new InlineKeyboardMarkup(
+            new[]
+            {
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
@@ -3239,32 +3245,13 @@ public class TelegramUpdateHandler
                     "📍 Məlumatlarım",
                     "menu:profile")
             }
-        };
-
-        if (Uri.TryCreate(
-                _telegramOptions.MiniAppUrl,
-                UriKind.Absolute,
-                out var miniAppUri) &&
-            miniAppUri.Scheme == Uri.UriSchemeHttps)
-        {
-            rows.Add(
-            [
-                InlineKeyboardButton.WithWebApp(
-                    "🛍 Mağazanı aç",
-                    new WebAppInfo
-                    {
-                        Url = miniAppUri.AbsoluteUri
-                    })
-            ]);
-        }
-
-        var keyboard = new InlineKeyboardMarkup(rows);
+            });
 
         await _botClient.SendMessage(
             chatId,
             "StockMate Bot-a xoş gəlmisiniz!\n\n" +
             "Məhsullara baxa, səbət yarada və sifariş verə bilərsiniz.\n" +
-            "Mini App üçün “🛍 Mağazanı aç” düyməsindən istifadə edin.",
+            "Mini App üçün mesaj sətrinin yanındakı “🛍 Mağaza” düyməsindən istifadə edin.",
             replyMarkup: keyboard);
     }
     private async Task SendAdminMainMenuAsync(long chatId)
@@ -3325,9 +3312,7 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Mini App-ı aşağıdakı düymədən aça bilərsiniz.",
-                replyMarkup: BuildMiniAppKeyboard(
-                    "📱 Paneli aç"));
+                "Mini App-ı mesaj sətrinin yanındakı “📱 Panel” düyməsindən aça bilərsiniz.");
         }
     }
 

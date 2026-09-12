@@ -1,8 +1,12 @@
+﻿using StockMate.Bot.Security.Models;
+
 namespace StockMate.Bot.Telegram.Services;
 
 public interface IMiniAppMenuButtonService
 {
-    Task ResetDefaultAsync(
+    Task SetAsync(
+        long telegramUserId,
+        MiniAppUserRole role,
         CancellationToken cancellationToken = default);
 
     Task ResetAsync(

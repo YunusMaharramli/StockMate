@@ -91,7 +91,6 @@ builder.Services.AddSingleton<TelegramBotClient>(
     });
 
 builder.Services.AddScoped<TelegramUpdateHandler>();
-builder.Services.AddHostedService<MiniAppMenuButtonCleanupService>();
 builder.Services.AddHostedService<TelegramPollingService>();
 builder.Services.AddSingleton<TelegramSessionStore>();
 builder.Services.AddSingleton<IMiniAppMenuButtonService, MiniAppMenuButtonService>();
