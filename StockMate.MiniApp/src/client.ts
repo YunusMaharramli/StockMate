@@ -75,6 +75,11 @@ async function downloadFile(path: string): Promise<void> {
   });
   const webApp = window.Telegram?.WebApp;
 
+  if (webApp?.platform === 'android' && webApp.openLink) {
+    webApp.openLink(ticket.url);
+    return;
+  }
+
   if (webApp?.downloadFile &&
       (webApp.isVersionAtLeast?.('8.0') ?? true)) {
     await new Promise<void>((resolve, reject) => {

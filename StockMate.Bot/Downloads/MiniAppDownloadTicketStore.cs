@@ -25,15 +25,19 @@ public sealed class MiniAppDownloadTicketStore
         return token;
     }
 
-    public bool TryConsume(string token)
+    public bool IsValid(string token)
     {
         if (string.IsNullOrWhiteSpace(token) ||
-            !_tickets.TryRemove(token, out var expiresAtUtc))
+            !_tickets.TryGetValue(token, out var expiresAtUtc))
         {
             return false;
         }
 
-        return expiresAtUtc > DateTimeOffset.UtcNow;
+        if (expiresAtUtc > DateTimeOffset.UtcNow)
+            return true;
+
+        _tickets.TryRemove(token, out _);
+        return false;
     }
 
     private void RemoveExpiredTickets()

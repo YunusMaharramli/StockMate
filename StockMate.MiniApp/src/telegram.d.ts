@@ -7,9 +7,11 @@ interface TelegramWebApp {
   readonly initData: string;
   readonly colorScheme: 'light' | 'dark';
   readonly version?: string;
+  readonly platform?: string;
   ready: () => void;
   expand: () => void;
   isVersionAtLeast?: (version: string) => boolean;
+  openLink?: (url: string) => void;
   downloadFile?: (
     params: TelegramDownloadFileParams,
     callback?: (accepted: boolean) => void,

@@ -28,12 +28,13 @@ public sealed class MiniAppShortageDownloadsController
         _excelExporter = excelExporter;
     }
 
-    [HttpGet("{token}")]
+    [AcceptVerbs("GET", "HEAD")]
+    [Route("{token}")]
     public async Task<IActionResult> Download(
         string token,
         CancellationToken cancellationToken)
     {
-        if (!_downloadTickets.TryConsume(token))
+        if (!_downloadTickets.IsValid(token))
             return NotFound();
 
         var products = await _shortages.GetMissingProductsAsync(
