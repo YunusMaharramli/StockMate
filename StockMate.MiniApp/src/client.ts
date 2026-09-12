@@ -69,26 +69,41 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function downloadFile(path: string, fileName: string): Promise<void> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    headers: {
-      'X-Telegram-Init-Data': initData(),
-    },
+async function downloadFile(path: string): Promise<void> {
+  const ticket = await request<{ url: string; fileName: string }>(path, {
+    method: 'POST',
   });
+  const webApp = window.Telegram?.WebApp;
 
-  await ensureSuccessful(response);
+  if (webApp?.downloadFile &&
+      (webApp.isVersionAtLeast?.('8.0') ?? true)) {
+    await new Promise<void>((resolve, reject) => {
+      webApp.downloadFile?.(
+        {
+          url: ticket.url,
+          file_name: ticket.fileName,
+        },
+        accepted => {
+          if (accepted) {
+            resolve();
+          } else {
+            reject(new Error('Fayl endirməsi ləğv edildi.'));
+          }
+        },
+      );
+    });
 
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
+    return;
+  }
+
   const link = document.createElement('a');
-
-  link.href = url;
-  link.download = fileName;
+  link.href = ticket.url;
+  link.download = ticket.fileName;
+  link.target = '_blank';
+  link.rel = 'noopener';
   document.body.appendChild(link);
   link.click();
   link.remove();
-
-  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
 async function getAllProducts(search = '') {
@@ -174,17 +189,9 @@ export const api = {
   changeShipmentStatus: (id: string, status: ShipmentStatus) => request<Shipment>(`/api/miniapp/shipments/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
   getShortages: () => request<MissingProduct[]>('/api/miniapp/admin/shortages'),
   getShortageOrders: (productId: string) => request<MissingProductOrder[]>(`/api/miniapp/admin/shortages/${productId}/orders`),
-  exportShortages: () => {
-    const currentDate = new Date();
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const day = String(currentDate.getDate()).padStart(2, '0');
-
-    return downloadFile(
-      '/api/miniapp/admin/shortages/export',
-      `catismayan-mehsullar-${year}-${month}-${day}.xlsx`,
-    );
-  },
+  exportShortages: () => downloadFile(
+    '/api/miniapp/admin/shortages/export-ticket',
+  ),
   getStockPurchases: (fromUtc: string, toUtc: string) => request<StockPurchase[]>(`/api/miniapp/admin/stock-purchases?fromUtc=${encodeURIComponent(fromUtc)}&toUtc=${encodeURIComponent(toUtc)}`),
   createStockPurchase: (purchasedAtUtc: string, note: string | undefined, items: CreateStockPurchaseItem[]) => request<StockPurchase>('/api/miniapp/admin/stock-purchases', { method: 'POST', body: JSON.stringify({ purchasedAtUtc, note: note || null, items }) }),
   getTurnoverReport: (fromUtc: string, toUtc: string, deliveryCompanyId?: string) => request<InventoryTurnoverReport>(`/api/miniapp/admin/reports/inventory-turnover?fromUtc=${encodeURIComponent(fromUtc)}&toUtc=${encodeURIComponent(toUtc)}${deliveryCompanyId ? `&deliveryCompanyId=${encodeURIComponent(deliveryCompanyId)}` : ''}`),

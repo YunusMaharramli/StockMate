@@ -3216,9 +3216,8 @@ public class TelegramUpdateHandler
     }
     private async Task SendCustomerMainMenuAsync(long chatId)
     {
-        var keyboard = new InlineKeyboardMarkup(
-            new[]
-            {
+        var rows = new List<InlineKeyboardButton[]>
+        {
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
@@ -3239,12 +3238,32 @@ public class TelegramUpdateHandler
                     "📍 Məlumatlarım",
                     "menu:profile")
             }
-            });
+        };
+
+        if (Uri.TryCreate(
+                _telegramOptions.MiniAppUrl,
+                UriKind.Absolute,
+                out var miniAppUri) &&
+            miniAppUri.Scheme == Uri.UriSchemeHttps)
+        {
+            rows.Add(
+            [
+                InlineKeyboardButton.WithWebApp(
+                    "🛍 Mağazanı aç",
+                    new WebAppInfo
+                    {
+                        Url = miniAppUri.AbsoluteUri
+                    })
+            ]);
+        }
+
+        var keyboard = new InlineKeyboardMarkup(rows);
 
         await _botClient.SendMessage(
             chatId,
             "StockMate Bot-a xoş gəlmisiniz!\n\n" +
-            "Məhsullara baxa, səbət yarada və sifariş verə bilərsiniz.",
+            "Məhsullara baxa, səbət yarada və sifariş verə bilərsiniz.\n" +
+            "Mini App üçün “🛍 Mağazanı aç” düyməsindən istifadə edin.",
             replyMarkup: keyboard);
     }
     private async Task SendAdminMainMenuAsync(long chatId)

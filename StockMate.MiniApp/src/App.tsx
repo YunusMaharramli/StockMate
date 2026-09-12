@@ -4,9 +4,6 @@ import type { Assignment, Customer, Order, Product, Shipment, ShipmentStatus, St
 
 type Section = 'home' | 'orders' | 'products' | 'stock' | 'staff' | 'customers' | 'history';
 type OrderFilter = 'new' | 'active' | 'partial' | 'special' | 'completed' | 'cancelled';
-type TelegramWebApp = { ready: () => void; expand: () => void; initData: string; colorScheme: 'light' | 'dark' };
-declare global { interface Window { Telegram?: { WebApp: TelegramWebApp } } }
-
 const categories: Array<{ id: Section; icon: string; title: string; description: string }> = [
   { id: 'orders', icon: '📦', title: 'Sifarişlər', description: 'Yeni, aktiv və tamamlanan sifarişlər' },
   { id: 'products', icon: '🛍️', title: 'Məhsullar', description: 'Kataloq, qiymətlər və şəkillər' },

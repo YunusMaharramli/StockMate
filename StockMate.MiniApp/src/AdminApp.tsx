@@ -815,7 +815,7 @@ function ShortagesScreen({
 
     try {
       await exportExcel();
-      notify('Excel faylı endirildi.');
+      notify('Excel faylının endirilməsi başladıldı.');
     } catch (reason) {
       setLocalError(reason instanceof Error
         ? reason.message

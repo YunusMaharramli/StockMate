@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using StockMate.Application;
 using StockMate.Application.Notifications;
+using StockMate.Bot.Downloads;
 using StockMate.Bot.ErrorHandling;
 using StockMate.Bot.Options;
 using StockMate.Bot.Security;
@@ -86,13 +87,18 @@ builder.Services.AddSingleton<TelegramBotClient>(
                 "in appsettings.Development.json or Telegram__AdminUserId in the environment.");
         }
 
-        return new TelegramBotClient(options.BotToken);
+        var client = new TelegramBotClient(options.BotToken);
+        client.OnMakingApiRequest +=
+            TelegramContentProtection.ApplyAsync;
+
+        return client;
     });
 
 builder.Services.AddScoped<TelegramUpdateHandler>();
 builder.Services.AddHostedService<TelegramPollingService>();
 builder.Services.AddSingleton<TelegramSessionStore>();
 builder.Services.AddSingleton<IMiniAppMenuButtonService, MiniAppMenuButtonService>();
+builder.Services.AddSingleton<IMiniAppDownloadTicketStore, MiniAppDownloadTicketStore>();
 builder.Services.AddScoped<IUserAccessChangedNotifier, UserAccessChangedNotifier>();
 builder.Services.AddScoped<IWorkflowNotificationService,WorkflowNotificationService>();
 builder.Services.AddSingleton<ITelegramInitDataValidator, TelegramInitDataValidator>();
