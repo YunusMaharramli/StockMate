@@ -25,6 +25,20 @@ public sealed class MiniAppMenuButtonService
         if (telegramUserId <= 0)
             throw new ArgumentOutOfRangeException(nameof(telegramUserId));
 
+        await UpdateAsync(telegramUserId, cancellationToken);
+    }
+
+    public Task ResetDefaultAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return UpdateAsync(null, cancellationToken);
+    }
+
+    private async Task UpdateAsync(
+        long? telegramUserId,
+        CancellationToken cancellationToken)
+    {
+
         try
         {
             await _botClient.SetChatMenuButton(
