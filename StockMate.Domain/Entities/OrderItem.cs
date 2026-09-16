@@ -18,16 +18,16 @@ public class OrderItem
         int specialOrderQuantity)
     {
         if (orderId == Guid.Empty)
-            throw new ArgumentException("Order ID is required.", nameof(orderId));
+            throw new ArgumentException("ID заказа обязателен.", nameof(orderId));
 
         if (productId == Guid.Empty)
-            throw new ArgumentException("Product ID is required.", nameof(productId));
+            throw new ArgumentException("ID товара обязателен.", nameof(productId));
 
         if (string.IsNullOrWhiteSpace(productName))
-            throw new ArgumentException("Product name is required.", nameof(productName));
+            throw new ArgumentException("Название товара обязательно.", nameof(productName));
 
         if (string.IsNullOrWhiteSpace(productCode))
-            throw new ArgumentException("Product code is required.", nameof(productCode));
+            throw new ArgumentException("Код товара обязателен.", nameof(productCode));
 
         if (unitPrice < 0)
             throw new ArgumentOutOfRangeException(nameof(unitPrice));
@@ -39,7 +39,7 @@ public class OrderItem
             throw new ArgumentOutOfRangeException(nameof(specialOrderQuantity));
 
         if (fromStockQuantity + specialOrderQuantity == 0)
-            throw new ArgumentException("Order item quantity must be greater than zero.");
+            throw new ArgumentException("Количество позиции заказа должно быть больше нуля.");
 
         Id = Guid.NewGuid();
         OrderId = orderId;
@@ -178,6 +178,6 @@ public class OrderItem
     {
         if (SpecialOrderQuantity == 0)
             throw new InvalidOperationException(
-                "This item does not contain a special-order quantity.");
+                "Эта позиция не содержит товаров под заказ.");
     }
 }

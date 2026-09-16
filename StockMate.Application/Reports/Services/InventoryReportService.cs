@@ -37,7 +37,7 @@ public sealed class InventoryReportService
         if (normalizedFrom >= normalizedTo)
         {
             throw new ArgumentException(
-                "The start date must be earlier than the end date.");
+                "Дата начала должна быть раньше даты окончания.");
         }
 
         string? deliveryCompanyName = null;
@@ -49,7 +49,7 @@ public sealed class InventoryReportService
                     deliveryCompanyId.Value,
                     cancellationToken)
                 ?? throw new KeyNotFoundException(
-                    "Delivery company was not found.");
+                    "Служба доставки не найдена.");
 
             deliveryCompanyName = company.Name;
         }

@@ -40,29 +40,29 @@ public class ShipmentService : IShipmentService
         CancellationToken cancellationToken = default)
     {
         var order = await _orderRepository.GetByOrderNumberAsync(orderNumber, cancellationToken)
-            ?? throw new KeyNotFoundException("Order was not found.");
+            ?? throw new KeyNotFoundException("Заказ не найден.");
         var worker = await GetRequiredStaffAsync(workerId, cancellationToken);
         var admin = await GetRequiredStaffAsync(adminId, cancellationToken);
 
         if (admin.Role != StaffRole.Admin || !admin.IsActive)
-            throw new UnauthorizedAccessException("Only an active admin can create shipments.");
+            throw new UnauthorizedAccessException("Только активный администратор может создавать доставки.");
         if (worker.Role != StaffRole.Worker || !worker.IsActive)
-            throw new InvalidOperationException("Shipment requires an active worker.");
+            throw new InvalidOperationException("Для доставки нужен активный сотрудник.");
         if (order.Status is not OrderStatus.Confirmed and
             not OrderStatus.Preparing and not OrderStatus.Delivering)
         {
-            throw new InvalidOperationException("Shipment requires an active order.");
+            throw new InvalidOperationException("Для доставки нужен активный заказ.");
         }
 
         var assignment = await _assignmentRepository.GetActiveByOrderIdAsync(order.Id, cancellationToken);
         if (assignment?.StaffId != workerId)
-            throw new InvalidOperationException("Order is not assigned to this worker.");
+            throw new InvalidOperationException("Заказ не назначен этому сотруднику.");
 
         if (order.DeliveryMode != DeliveryMode.PartialAllowed &&
             order.ReadyQuantity < order.RemainingQuantity)
         {
             throw new InvalidOperationException(
-                "Order must be fully ready because partial delivery is not allowed.");
+                "Заказ должен быть полностью готов, так как частичная доставка запрещена.");
         }
 
         var existingShipments = await _shipmentRepository.GetByOrderIdAsync(order.Id, cancellationToken);
@@ -84,7 +84,7 @@ public class ShipmentService : IShipmentService
             .ToList();
 
         if (quantities.Count == 0)
-            throw new InvalidOperationException("No unassigned ready products exist.");
+            throw new InvalidOperationException("Нет готовых товаров без назначения.");
 
         var shipment = new OrderShipment(order.Id, worker.Id);
         await _shipmentRepository.AddAsync(shipment, cancellationToken);
@@ -108,16 +108,16 @@ public class ShipmentService : IShipmentService
         CancellationToken cancellationToken = default)
     {
         var shipment = await _shipmentRepository.GetByIdAsync(shipmentId, cancellationToken)
-            ?? throw new KeyNotFoundException("Shipment was not found.");
+            ?? throw new KeyNotFoundException("Доставка не найдена.");
         var actor = await GetRequiredStaffAsync(actorStaffId, cancellationToken);
         var worker = await GetRequiredStaffAsync(shipment.StaffId, cancellationToken);
 
         if (!actor.IsActive ||
             (actor.Role != StaffRole.Admin && actor.Id != shipment.StaffId))
-            throw new UnauthorizedAccessException("Staff member cannot update this shipment.");
+            throw new UnauthorizedAccessException("Сотрудник не может обновить эту доставку.");
 
         var order = await _orderRepository.GetByIdAsync(shipment.OrderId, cancellationToken)
-            ?? throw new KeyNotFoundException("Order was not found.");
+            ?? throw new KeyNotFoundException("Заказ не найден.");
         var previous = shipment.Status;
         switch (newStatus)
         {
@@ -169,7 +169,7 @@ public class ShipmentService : IShipmentService
                 }
                 break;
             case ShipmentStatus.Cancelled: shipment.Cancel(); break;
-            default: throw new InvalidOperationException("Unsupported shipment status.");
+            default: throw new InvalidOperationException("Неподдерживаемый статус доставки.");
         }
 
         await _shipmentRepository.AddHistoryAsync(
@@ -204,7 +204,7 @@ public class ShipmentService : IShipmentService
         CancellationToken cancellationToken = default)
     {
         var order = await _orderRepository.GetByOrderNumberAsync(orderNumber, cancellationToken)
-            ?? throw new KeyNotFoundException("Order was not found.");
+            ?? throw new KeyNotFoundException("Заказ не найден.");
         var shipments = await _shipmentRepository.GetByOrderIdAsync(order.Id, cancellationToken);
         var result = new List<ShipmentDto>();
         foreach (var shipment in shipments)
@@ -217,7 +217,7 @@ public class ShipmentService : IShipmentService
 
     private async Task<StaffEntity> GetRequiredStaffAsync(Guid id, CancellationToken cancellationToken)
         => await _staffRepository.GetByIdAsync(id, cancellationToken)
-            ?? throw new KeyNotFoundException("Staff member was not found.");
+            ?? throw new KeyNotFoundException("Сотрудник не найден.");
 
     private async Task<ShipmentDto> MapAsync(
         OrderShipment shipment,

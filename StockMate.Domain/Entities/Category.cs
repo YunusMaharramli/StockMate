@@ -10,7 +10,7 @@ public sealed class Category
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException(
-                "Category name is required.",
+                "Название категории обязательно.",
                 nameof(name));
 
         if (sortOrder < 0)
@@ -44,7 +44,7 @@ public sealed class Category
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException(
-                "Category name is required.",
+                "Название категории обязательно.",
                 nameof(name));
 
         SetName(name);
@@ -64,7 +64,7 @@ public sealed class Category
     {
         if (IsArchived)
             throw new InvalidOperationException(
-                "Archived category cannot be activated.");
+                "Архивную категорию нельзя активировать.");
 
         IsActive = true;
         UpdatedAtUtc = DateTime.UtcNow;

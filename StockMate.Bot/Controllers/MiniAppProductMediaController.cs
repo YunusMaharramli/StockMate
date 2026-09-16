@@ -32,7 +32,7 @@ public sealed class MiniAppProductMediaController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (image.Length is <= 0 or > MaximumImageSize)
-            throw new ArgumentException("Image must be smaller than 5 MB.");
+            throw new ArgumentException("Размер изображения должен быть меньше 5 МБ.");
 
         var extensions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -41,7 +41,7 @@ public sealed class MiniAppProductMediaController : ControllerBase
             ["image/webp"] = ".webp"
         };
         if (!extensions.TryGetValue(image.ContentType, out var extension))
-            throw new ArgumentException("Only JPG, PNG and WEBP images are supported.");
+            throw new ArgumentException("Поддерживаются только изображения JPG, PNG и WEBP.");
 
         var fileName = $"{Guid.NewGuid():N}{extension}";
         var directory = GetImageDirectory();

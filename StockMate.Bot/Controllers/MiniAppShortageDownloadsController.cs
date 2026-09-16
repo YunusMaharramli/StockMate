@@ -41,7 +41,7 @@ public sealed class MiniAppShortageDownloadsController
             cancellationToken);
         var content = _excelExporter.Export(products);
         var fileName =
-            $"catismayan-mehsullar-{DateTime.UtcNow:yyyy-MM-dd}.xlsx";
+            $"недостающие-товары-{DateTime.UtcNow:yyyy-MM-dd}.xlsx";
 
         Response.Headers[HeaderNames.CacheControl] = "no-store";
         Response.Headers[HeaderNames.AccessControlAllowOrigin] =

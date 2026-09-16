@@ -29,7 +29,7 @@ public sealed class StockPurchaseService
             request.Items.Count == 0)
         {
             throw new InvalidOperationException(
-                "A stock purchase must contain at least one product.");
+                "Закупка должна содержать хотя бы один товар.");
         }
 
         var productIds = request.Items
@@ -40,7 +40,7 @@ public sealed class StockPurchaseService
         if (productIds.Length != request.Items.Count)
         {
             throw new InvalidOperationException(
-                "The same product cannot be added more than once.");
+                "Один и тот же товар нельзя добавлять более одного раза.");
         }
 
         var products =
@@ -62,13 +62,13 @@ public sealed class StockPurchaseService
                     out var product))
             {
                 throw new KeyNotFoundException(
-                    $"Product '{requestedItem.ProductId}' was not found.");
+                    $"Товар '{requestedItem.ProductId}' не найден.");
             }
 
             if (!product.IsActive)
             {
                 throw new InvalidOperationException(
-                    $"Inactive product '{product.Name}' cannot be purchased.");
+                    $"Неактивный товар '{product.Name}' нельзя закупить.");
             }
 
             purchase.AddItem(
@@ -126,7 +126,7 @@ public sealed class StockPurchaseService
         if (normalizedFrom >= normalizedTo)
         {
             throw new ArgumentException(
-                "The start date must be earlier than the end date.");
+                "Дата начала должна быть раньше даты окончания.");
         }
 
         var purchases =

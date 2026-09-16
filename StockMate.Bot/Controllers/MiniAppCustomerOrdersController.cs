@@ -80,12 +80,12 @@ public sealed class MiniAppCustomerOrdersController : ControllerBase
         if (order.Status != OrderStatus.PendingAdminApproval)
         {
             throw new InvalidOperationException(
-                "Yalnız admin təsdiqindən əvvəl sifarişi ləğv etmək olar.");
+                "Заказ можно отменить только до подтверждения администратором.");
         }
 
         await _orders.CancelAsync(
             orderNumber,
-            "Müştəri tərəfindən ləğv edildi.",
+            "Отменено клиентом.",
             cancellationToken);
 
         return NoContent();
@@ -99,12 +99,12 @@ public sealed class MiniAppCustomerOrdersController : ControllerBase
         var order = await _orders.GetByOrderNumberAsync(
             orderNumber,
             cancellationToken)
-            ?? throw new KeyNotFoundException("Sifariş tapılmadı.");
+            ?? throw new KeyNotFoundException("Заказ не найден.");
 
         if (!customer.CustomerId.HasValue ||
             order.CustomerId != customer.CustomerId.Value)
         {
-            throw new UnauthorizedAccessException("İcazəniz yoxdur.");
+            throw new UnauthorizedAccessException("У вас нет доступа.");
         }
 
         return order;

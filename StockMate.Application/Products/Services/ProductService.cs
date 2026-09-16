@@ -40,7 +40,7 @@ public class ProductService : IProductService
                 cancellationToken))
         {
             throw new InvalidOperationException(
-                $"Product code '{request.Code}' already exists.");
+                $"Код товара '{request.Code}' уже существует.");
         }
 
         var product = new Product(
@@ -103,7 +103,7 @@ public class ProductService : IProductService
         {
             throw new ArgumentOutOfRangeException(
                 nameof(pageSize),
-                "Page size must be 5, 10 or 20.");
+                "Размер страницы должен быть 5, 10 или 20.");
         }
 
         var products = await _productRepository.GetActivePageAsync(
@@ -273,7 +273,7 @@ public class ProductService : IProductService
                    productId,
                    cancellationToken)
                ?? throw new KeyNotFoundException(
-                   $"Product '{productId}' was not found.");
+                   $"Товар '{productId}' не найден.");
     }
 
     private async Task SaveMovementAsync(
@@ -340,7 +340,7 @@ public class ProductService : IProductService
         if (request.UpdateClassification)
         {
             if (!request.CategoryId.HasValue)
-                throw new ArgumentException("Category ID is required.", nameof(request));
+                throw new ArgumentException("ID категории обязателен.", nameof(request));
 
             await ValidateClassificationAsync(
                 request.CategoryId.Value,
@@ -371,7 +371,7 @@ public class ProductService : IProductService
         {
             throw new ArgumentOutOfRangeException(
                 nameof(pageSize),
-                "Page size must be 5, 10 or 20.");
+                "Размер страницы должен быть 5, 10 или 20.");
         }
 
         var products = await _productRepository.GetAdminPageAsync(
@@ -442,7 +442,7 @@ public class ProductService : IProductService
                 cancellationToken))
         {
             throw new InvalidOperationException(
-                "Bu məhsul sifariş və ya alış tarixçəsində istifadə olunub, ona görə həmişəlik silinə bilməz. Məhsulu arxivləyin.");
+                "Этот товар используется в истории заказов или закупок, поэтому его нельзя удалить навсегда. Архивируйте товар.");
         }
 
         await _productRepository.PrepareDeleteAsync(product, cancellationToken);
@@ -461,15 +461,15 @@ public class ProductService : IProductService
             .ToArray();
 
         if (ids.Length == 0)
-            throw new ArgumentException("At least one product must be selected.", nameof(request));
+            throw new ArgumentException("Необходимо выбрать хотя бы один товар.", nameof(request));
 
         if (ids.Length > 500)
-            throw new ArgumentException("No more than 500 products can be changed at once.", nameof(request));
+            throw new ArgumentException("За один раз можно изменить не более 500 товаров.", nameof(request));
 
         if (request.Action == BulkProductAction.Move)
         {
             if (!request.CategoryId.HasValue)
-                throw new ArgumentException("A target category is required.", nameof(request));
+                throw new ArgumentException("Необходимо указать целевую категорию.", nameof(request));
 
             await ValidateClassificationAsync(
                 request.CategoryId.Value,
@@ -479,7 +479,7 @@ public class ProductService : IProductService
 
         var products = await _productRepository.GetByIdsAsync(ids, cancellationToken);
         if (products.Count != ids.Length)
-            throw new KeyNotFoundException("One or more selected products were not found.");
+            throw new KeyNotFoundException("Один или несколько выбранных товаров не найдены.");
 
         foreach (var product in products)
         {
@@ -516,13 +516,13 @@ public class ProductService : IProductService
         CancellationToken cancellationToken)
     {
         if (_categoryRepository is null || _subcategoryRepository is null)
-            throw new InvalidOperationException("Catalog repositories are not configured.");
+            throw new InvalidOperationException("Репозитории каталога не настроены.");
 
         var category = await _categoryRepository.GetByIdAsync(categoryId, cancellationToken)
-            ?? throw new KeyNotFoundException("Category was not found.");
+            ?? throw new KeyNotFoundException("Категория не найдена.");
 
         if (category.IsArchived)
-            throw new InvalidOperationException("An archived category cannot be assigned to a product.");
+            throw new InvalidOperationException("Архивную категорию нельзя назначить товару.");
 
         if (!subcategoryId.HasValue)
             return;
@@ -530,13 +530,13 @@ public class ProductService : IProductService
         var subcategory = await _subcategoryRepository.GetByIdAsync(
             subcategoryId.Value,
             cancellationToken)
-            ?? throw new KeyNotFoundException("Subcategory was not found.");
+            ?? throw new KeyNotFoundException("Подкатегория не найдена.");
 
         if (subcategory.CategoryId != categoryId)
-            throw new InvalidOperationException("The subcategory does not belong to the selected category.");
+            throw new InvalidOperationException("Подкатегория не относится к выбранной категории.");
 
         if (subcategory.IsArchived)
-            throw new InvalidOperationException("An archived subcategory cannot be assigned to a product.");
+            throw new InvalidOperationException("Архивную подкатегорию нельзя назначить товару.");
     }
 
     private static void ValidatePage(int pageNumber, int pageSize)
@@ -547,6 +547,6 @@ public class ProductService : IProductService
         if (!AllowedPageSizes.Contains(pageSize))
             throw new ArgumentOutOfRangeException(
                 nameof(pageSize),
-                "Page size must be 5, 10 or 20.");
+                "Размер страницы должен быть 5, 10 или 20.");
     }
 }

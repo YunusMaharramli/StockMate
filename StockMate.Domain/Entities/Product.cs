@@ -20,10 +20,10 @@ public class Product
         int minimumStockQuantity = 0)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Product name is required.", nameof(name));
+            throw new ArgumentException("Название товара обязательно.", nameof(name));
 
         if (string.IsNullOrWhiteSpace(code))
-            throw new ArgumentException("Product code is required.", nameof(code));
+            throw new ArgumentException("Код товара обязателен.", nameof(code));
 
         if (price < 0)
             throw new ArgumentOutOfRangeException(nameof(price));
@@ -32,14 +32,14 @@ public class Product
             throw new ArgumentOutOfRangeException(nameof(stockQuantity));
 
         if (string.IsNullOrWhiteSpace(description))
-            throw new ArgumentException("Description is required.", nameof(description));
+            throw new ArgumentException("Описание обязательно.", nameof(description));
 
         if (minimumStockQuantity < 0)
             throw new ArgumentOutOfRangeException(nameof(minimumStockQuantity));
 
         if (subcategoryId.HasValue && !categoryId.HasValue)
             throw new ArgumentException(
-                "A subcategory cannot be assigned without a category.",
+                "Нельзя назначить подкатегорию без категории.",
                 nameof(subcategoryId));
 
         Id = Guid.NewGuid();
@@ -101,10 +101,10 @@ public class Product
     string? imageReference)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Product name is required.", nameof(name));
+            throw new ArgumentException("Название товара обязательно.", nameof(name));
 
         if (string.IsNullOrWhiteSpace(description))
-            throw new ArgumentException("Description is required.", nameof(description));
+            throw new ArgumentException("Описание обязательно.", nameof(description));
 
         Name = name.Trim();
         Description = description.Trim();
@@ -126,7 +126,7 @@ public class Product
         Guid? subcategoryId)
     {
         if (categoryId == Guid.Empty)
-            throw new ArgumentException("Category ID is required.", nameof(categoryId));
+            throw new ArgumentException("ID категории обязателен.", nameof(categoryId));
 
         CategoryId = categoryId;
         SubcategoryId = subcategoryId;
@@ -178,7 +178,7 @@ public class Product
 
         if (quantity > StockQuantity)
             throw new InvalidOperationException(
-                "Quantity cannot exceed the available stock.");
+                "Количество не может превышать доступный остаток.");
 
         var previousQuantity = StockQuantity;
         StockQuantity -= quantity;
@@ -215,11 +215,11 @@ public class Product
             throw new ArgumentOutOfRangeException(nameof(quantity));
 
         if (orderId == Guid.Empty)
-            throw new ArgumentException("Order ID is required.", nameof(orderId));
+            throw new ArgumentException("ID заказа обязателен.", nameof(orderId));
 
         if (quantity > StockQuantity)
             throw new InvalidOperationException(
-                "There is not enough stock to confirm the order.");
+                "Недостаточно товара на складе для подтверждения заказа.");
 
         var previousQuantity = StockQuantity;
         StockQuantity -= quantity;
@@ -240,7 +240,7 @@ public class Product
             throw new ArgumentOutOfRangeException(nameof(quantity));
 
         if (orderId == Guid.Empty)
-            throw new ArgumentException("Order ID is required.", nameof(orderId));
+            throw new ArgumentException("ID заказа обязателен.", nameof(orderId));
 
         var previousQuantity = StockQuantity;
         StockQuantity += quantity;

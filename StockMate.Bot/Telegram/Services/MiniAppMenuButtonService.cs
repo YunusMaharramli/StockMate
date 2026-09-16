@@ -42,13 +42,13 @@ public sealed class MiniAppMenuButtonService
         var buttonText = role switch
         {
             MiniAppUserRole.Admin => "📱 Panel",
-            MiniAppUserRole.Worker => "📦 Tapşırıqlar",
-            MiniAppUserRole.Customer => "🛍 Mağaza",
+            MiniAppUserRole.Worker => "📦 Задания",
+            MiniAppUserRole.Customer => "🛍 Магазин",
 
             _ => throw new ArgumentOutOfRangeException(
                 nameof(role),
                 role,
-                "Mini App rolu tanınmadı.")
+                "Неизвестная роль Mini App.")
         };
 
         await UpdateAsync(

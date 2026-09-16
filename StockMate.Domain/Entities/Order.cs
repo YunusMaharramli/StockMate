@@ -18,13 +18,13 @@ public class Order
         double? longitude = null)
     {
         if (customerId == Guid.Empty)
-            throw new ArgumentException("Customer ID is required.", nameof(customerId));
+            throw new ArgumentException("ID клиента обязателен.", nameof(customerId));
 
         if (string.IsNullOrWhiteSpace(phoneNumber))
-            throw new ArgumentException("Phone number is required.", nameof(phoneNumber));
+            throw new ArgumentException("Номер телефона обязателен.", nameof(phoneNumber));
 
         if (string.IsNullOrWhiteSpace(deliveryAddress))
-            throw new ArgumentException("Delivery address is required.", nameof(deliveryAddress));
+            throw new ArgumentException("Адрес доставки обязателен.", nameof(deliveryAddress));
 
         Id = Guid.NewGuid();
         CustomerId = customerId;
@@ -101,18 +101,18 @@ public class Order
     {
         if (Status != OrderStatus.PendingAdminApproval)
             throw new InvalidOperationException(
-                "Items can only be added before admin approval.");
+                "Товары можно добавлять только до подтверждения администратором.");
 
         if (!product.IsActive)
-            throw new InvalidOperationException("Inactive product cannot be ordered.");
+            throw new InvalidOperationException("Неактивный товар нельзя заказать.");
 
         if (fromStockQuantity > product.StockQuantity)
             throw new InvalidOperationException(
-                "Requested stock quantity exceeds the available stock.");
+                "Запрошенное количество превышает доступный остаток.");
 
         if (_items.Any(item => item.ProductId == product.Id))
             throw new InvalidOperationException(
-                "Product already exists in this order.");
+                "Товар уже есть в этом заказе.");
 
         var item = new OrderItem(
             Id,
@@ -146,7 +146,7 @@ public class Order
         EnsureStatus(OrderStatus.PendingAdminApproval);
 
         if (_items.Count == 0)
-            throw new InvalidOperationException("Empty order cannot be confirmed.");
+            throw new InvalidOperationException("Нельзя подтвердить пустой заказ.");
 
         Status = OrderStatus.Confirmed;
         ConfirmedAtUtc = DateTime.UtcNow;
@@ -181,7 +181,7 @@ public class Order
 
         if (_items.Any(item => item.DeliveredQuantity > 0))
             throw new InvalidOperationException(
-                "Delivery mode cannot be changed after the first delivery.");
+                "Режим доставки нельзя изменить после первой доставки.");
 
         DeliveryMode = deliveryMode;
     }
@@ -192,14 +192,14 @@ public class Order
             OrderStatus.Completed or OrderStatus.Cancelled)
         {
             throw new InvalidOperationException(
-                "Order must be confirmed before delivery.");
+                "Заказ нужно подтвердить до доставки.");
         }
 
         if (DeliveryMode != DeliveryMode.PartialAllowed &&
             ReadyQuantity < RemainingQuantity)
         {
             throw new InvalidOperationException(
-                "The order is configured to be delivered all together.");
+                "Для этого заказа выбрана доставка всех товаров вместе.");
         }
 
         var delivered = new Dictionary<Guid, int>();
@@ -213,7 +213,7 @@ public class Order
         }
 
         if (delivered.Count == 0)
-            throw new InvalidOperationException("No products are ready for delivery.");
+            throw new InvalidOperationException("Нет товаров, готовых к доставке.");
 
         if (_items.All(item => item.RemainingQuantity == 0))
         {
@@ -235,17 +235,17 @@ public class Order
             OrderStatus.Completed or OrderStatus.Cancelled)
         {
             throw new InvalidOperationException(
-                "Order must be active before delivery.");
+                "Перед доставкой заказ должен быть активен.");
         }
 
         if (quantities.Count == 0)
-            throw new InvalidOperationException("Shipment is empty.");
+            throw new InvalidOperationException("Доставка пуста.");
 
         foreach (var entry in quantities)
         {
             var item = _items.FirstOrDefault(item => item.Id == entry.Key)
                 ?? throw new KeyNotFoundException(
-                    $"Order item '{entry.Key}' was not found.");
+                    $"Элемент заказа '{entry.Key}' не найден.");
 
             item.DeliverQuantity(entry.Value);
         }
@@ -267,13 +267,13 @@ public class Order
             OrderStatus.Completed or OrderStatus.Cancelled)
         {
             throw new InvalidOperationException(
-                "Remaining products cannot be cancelled in the current status.");
+                "В текущем статусе нельзя отменить оставшиеся товары.");
         }
 
         var cancelled = _items.Sum(item => item.CancelRemainingQuantity());
 
         if (cancelled == 0)
-            throw new InvalidOperationException("Order has no remaining products.");
+            throw new InvalidOperationException("В заказе не осталось товаров.");
 
         Status = OrderStatus.Completed;
         CompletedAtUtc = DateTime.UtcNow;
@@ -285,17 +285,17 @@ public class Order
     {
         if (Status is OrderStatus.Completed or OrderStatus.Cancelled)
             throw new InvalidOperationException(
-                "Completed or cancelled order cannot be cancelled.");
+                "Завершённый или отменённый заказ нельзя отменить.");
 
         if (string.IsNullOrWhiteSpace(reason))
             throw new ArgumentException(
-                "Cancellation reason is required.",
+                "Причина отмены обязательна.",
                 nameof(reason));
 
         if (_items.Any(item => item.DeliveredQuantity > 0))
             throw new InvalidOperationException(
-                "A partially delivered order cannot be fully cancelled. " +
-                "Cancel only its remaining products.");
+                "Частично доставленный заказ нельзя отменить полностью. " +
+                "Отмените только оставшиеся товары.");
 
         Status = OrderStatus.Cancelled;
         CancellationReason = reason.Trim();
@@ -307,7 +307,7 @@ public class Order
         if (Status != requiredStatus)
         {
             throw new InvalidOperationException(
-                $"Order must be in {requiredStatus} status.");
+                $"Заказ должен иметь статус {requiredStatus}.");
         }
     }
     public void SelectDeliveryDetails(
@@ -317,25 +317,25 @@ public class Order
         if (Status != OrderStatus.PendingAdminApproval)
         {
             throw new InvalidOperationException(
-                "Delivery details can only be selected before admin approval.");
+                "Данные доставки можно выбрать только до подтверждения администратором.");
         }
 
         if (address.CustomerId != CustomerId)
         {
             throw new InvalidOperationException(
-                "The selected address does not belong to this customer.");
+                "Выбранный адрес не принадлежит этому клиенту.");
         }
 
         if (!address.IsActive)
         {
             throw new InvalidOperationException(
-                "An inactive address cannot be selected.");
+                "Неактивный адрес нельзя выбрать.");
         }
 
         if (!company.IsActive)
         {
             throw new InvalidOperationException(
-                "An inactive delivery company cannot be selected.");
+                "Неактивную службу доставки нельзя выбрать.");
         }
 
         CustomerAddressId = address.Id;

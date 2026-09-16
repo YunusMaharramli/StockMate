@@ -36,18 +36,18 @@ public class OrderAssignmentService : IOrderAssignmentService
         CancellationToken cancellationToken = default)
     {
         var order = await _orderRepository.GetByOrderNumberAsync(orderNumber, cancellationToken)
-            ?? throw new KeyNotFoundException("Order was not found.");
+            ?? throw new KeyNotFoundException("Заказ не найден.");
         var worker = await _staffRepository.GetByIdAsync(workerId, cancellationToken)
-            ?? throw new KeyNotFoundException("Worker was not found.");
+            ?? throw new KeyNotFoundException("Сотрудник не найден.");
         var admin = await _staffRepository.GetByIdAsync(adminId, cancellationToken)
-            ?? throw new KeyNotFoundException("Admin was not found.");
+            ?? throw new KeyNotFoundException("Администратор не найден.");
 
         if (!admin.IsActive || admin.Role != StaffRole.Admin)
-            throw new UnauthorizedAccessException("Only an active admin can assign orders.");
+            throw new UnauthorizedAccessException("Только активный администратор может назначать заказы.");
         if (!worker.IsActive || worker.Role != StaffRole.Worker)
-            throw new InvalidOperationException("Order can only be assigned to an active worker.");
+            throw new InvalidOperationException("Заказ можно назначить только активному сотруднику.");
         if (order.Status is OrderStatus.PendingAdminApproval or OrderStatus.Completed or OrderStatus.Cancelled)
-            throw new InvalidOperationException("Order must be confirmed and active.");
+            throw new InvalidOperationException("Заказ должен быть подтверждён и активен.");
 
         var current = await _assignmentRepository.GetActiveByOrderIdAsync(order.Id, cancellationToken);
         if (current?.StaffId == workerId)
@@ -60,7 +60,7 @@ public class OrderAssignmentService : IOrderAssignmentService
                     shipment.Status is not ShipmentStatus.Delivered and not ShipmentStatus.Cancelled))
             {
                 throw new InvalidOperationException(
-                    "Active shipment must be completed or cancelled before changing the worker.");
+                    "Перед сменой сотрудника нужно завершить или отменить активную доставку.");
             }
         }
 
@@ -82,7 +82,7 @@ public class OrderAssignmentService : IOrderAssignmentService
     {
         var worker = await _staffRepository
             .GetByIdAsync(workerId, cancellationToken)
-            ?? throw new KeyNotFoundException("Worker was not found.");
+            ?? throw new KeyNotFoundException("Сотрудник не найден.");
         var assignments = await _assignmentRepository
             .GetActiveByStaffIdAsync(workerId, cancellationToken);
         var result = new List<OrderAssignmentDto>();
@@ -105,14 +105,14 @@ public class OrderAssignmentService : IOrderAssignmentService
     {
         var order = await _orderRepository
             .GetByOrderNumberAsync(orderNumber, cancellationToken)
-            ?? throw new KeyNotFoundException("Order was not found.");
+            ?? throw new KeyNotFoundException("Заказ не найден.");
         var assignment = await _assignmentRepository
             .GetActiveByOrderIdAsync(order.Id, cancellationToken);
         if (assignment is null || order.Status is OrderStatus.Completed or OrderStatus.Cancelled)
             return null;
         var worker = await _staffRepository
             .GetByIdAsync(assignment.StaffId, cancellationToken)
-            ?? throw new KeyNotFoundException("Worker was not found.");
+            ?? throw new KeyNotFoundException("Сотрудник не найден.");
         return Map(assignment, orderNumber, worker);
     }
 
@@ -123,12 +123,12 @@ public class OrderAssignmentService : IOrderAssignmentService
     {
         var admin = await _staffRepository
             .GetByIdAsync(adminId, cancellationToken)
-            ?? throw new KeyNotFoundException("Admin was not found.");
+            ?? throw new KeyNotFoundException("Администратор не найден.");
         if (!admin.IsActive || admin.Role != StaffRole.Admin)
-            throw new UnauthorizedAccessException("Only an active admin can release assignments.");
+            throw new UnauthorizedAccessException("Только активный администратор может снимать назначения.");
 
         var order = await _orderRepository.GetByOrderNumberAsync(orderNumber, cancellationToken)
-            ?? throw new KeyNotFoundException("Order was not found.");
+            ?? throw new KeyNotFoundException("Заказ не найден.");
         var assignment = await _assignmentRepository.GetActiveByOrderIdAsync(order.Id, cancellationToken);
         if (assignment is null)
             return;
@@ -138,7 +138,7 @@ public class OrderAssignmentService : IOrderAssignmentService
                 shipment.Status is not ShipmentStatus.Delivered and not ShipmentStatus.Cancelled))
         {
             throw new InvalidOperationException(
-                "Active shipment must be completed or cancelled before releasing the worker.");
+                "Перед снятием сотрудника с заказа нужно завершить или отменить активную доставку.");
         }
 
         assignment.Release();

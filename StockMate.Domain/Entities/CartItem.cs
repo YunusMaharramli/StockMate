@@ -15,10 +15,10 @@ public class CartItem
         CartItemFulfillmentMode fulfillmentMode)
     {
         if (cartId == Guid.Empty)
-            throw new ArgumentException("Cart ID is required.", nameof(cartId));
+            throw new ArgumentException("ID корзины обязателен.", nameof(cartId));
 
         if (productId == Guid.Empty)
-            throw new ArgumentException("Product ID is required.", nameof(productId));
+            throw new ArgumentException("ID товара обязателен.", nameof(productId));
 
         if (quantity <= 0)
             throw new ArgumentOutOfRangeException(nameof(quantity));

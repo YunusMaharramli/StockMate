@@ -61,7 +61,7 @@ public sealed class MiniAppShortagesController : ControllerBase
         var content = _excelExporter.Export(products);
 
         var fileName =
-            $"catismayan-mehsullar-{DateTime.UtcNow:yyyy-MM-dd}.xlsx";
+            $"недостающие-товары-{DateTime.UtcNow:yyyy-MM-dd}.xlsx";
 
         return File(
             content,
@@ -77,7 +77,7 @@ public sealed class MiniAppShortagesController : ControllerBase
             TimeSpan.FromMinutes(2));
 
         var fileName =
-            $"catismayan-mehsullar-{DateTime.UtcNow:yyyy-MM-dd}.xlsx";
+            $"недостающие-товары-{DateTime.UtcNow:yyyy-MM-dd}.xlsx";
 
         var downloadUrl = Url.ActionLink(
             nameof(MiniAppShortageDownloadsController.Download),
@@ -85,7 +85,7 @@ public sealed class MiniAppShortagesController : ControllerBase
             new { token },
             Request.Scheme)
             ?? throw new InvalidOperationException(
-                "Endirmə ünvanı yaradıla bilmədi.");
+                "Не удалось создать ссылку для скачивания.");
 
         return Ok(new ShortageExportTicketResponse(
             downloadUrl,

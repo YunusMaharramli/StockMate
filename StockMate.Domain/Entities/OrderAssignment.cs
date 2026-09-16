@@ -6,9 +6,9 @@ public class OrderAssignment
 
     public OrderAssignment(Guid orderId, Guid staffId, Guid assignedByStaffId)
     {
-        if (orderId == Guid.Empty) throw new ArgumentException("Order ID is required.", nameof(orderId));
-        if (staffId == Guid.Empty) throw new ArgumentException("Staff ID is required.", nameof(staffId));
-        if (assignedByStaffId == Guid.Empty) throw new ArgumentException("Assigning admin ID is required.", nameof(assignedByStaffId));
+        if (orderId == Guid.Empty) throw new ArgumentException("ID заказа обязателен.", nameof(orderId));
+        if (staffId == Guid.Empty) throw new ArgumentException("ID сотрудника обязателен.", nameof(staffId));
+        if (assignedByStaffId == Guid.Empty) throw new ArgumentException("ID назначающего администратора обязателен.", nameof(assignedByStaffId));
 
         Id = Guid.NewGuid();
         OrderId = orderId;
@@ -28,7 +28,7 @@ public class OrderAssignment
     public void Release()
     {
         if (!IsActive)
-            throw new InvalidOperationException("Order assignment is already released.");
+            throw new InvalidOperationException("Назначение заказа уже снято.");
         ReleasedAtUtc = DateTime.UtcNow;
     }
 }

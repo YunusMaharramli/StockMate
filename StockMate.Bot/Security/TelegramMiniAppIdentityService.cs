@@ -163,6 +163,6 @@ public sealed class TelegramMiniAppIdentityService
     private static UnauthorizedAccessException AccessDenied()
     {
         return new UnauthorizedAccessException(
-            "İcazəniz yoxdur.");
+            "У вас нет доступа.");
     }
 }

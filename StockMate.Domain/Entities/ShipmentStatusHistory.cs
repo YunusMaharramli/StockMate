@@ -12,8 +12,8 @@ public class ShipmentStatusHistory
         ShipmentStatus? previousStatus,
         ShipmentStatus newStatus)
     {
-        if (shipmentId == Guid.Empty) throw new ArgumentException("Shipment ID is required.", nameof(shipmentId));
-        if (staffId == Guid.Empty) throw new ArgumentException("Staff ID is required.", nameof(staffId));
+        if (shipmentId == Guid.Empty) throw new ArgumentException("ID доставки обязателен.", nameof(shipmentId));
+        if (staffId == Guid.Empty) throw new ArgumentException("ID сотрудника обязателен.", nameof(staffId));
 
         Id = Guid.NewGuid();
         ShipmentId = shipmentId;

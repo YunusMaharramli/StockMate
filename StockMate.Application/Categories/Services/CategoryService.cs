@@ -35,7 +35,7 @@ public sealed class CategoryService : ICategoryService
         if (nameExists)
         {
             throw new InvalidOperationException(
-                $"A category named '{request.Name.Trim()}' already exists.");
+                $"Категория с названием '{request.Name.Trim()}' уже существует.");
         }
 
         var category = new CategoryEntity(
@@ -125,7 +125,7 @@ public sealed class CategoryService : ICategoryService
         if (nameExists)
         {
             throw new InvalidOperationException(
-                $"Another category named '{request.Name.Trim()}' already exists.");
+                $"Другая категория с названием '{request.Name.Trim()}' уже существует.");
         }
 
         category.Rename(request.Name);
@@ -206,7 +206,7 @@ public sealed class CategoryService : ICategoryService
         if (subcategoryCount > 0 || productCount > 0)
         {
             throw new InvalidOperationException(
-                "The category is not empty. Move or archive its products and subcategories before deleting it.");
+                "Категория не пуста. Переместите или архивируйте её товары и подкатегории перед удалением.");
         }
 
         _categoryRepository.Remove(category);
@@ -236,7 +236,7 @@ public sealed class CategoryService : ICategoryService
                     request.TargetCategoryId.Value == categoryId)
                 {
                     throw new ArgumentException(
-                        "A different target category is required.",
+                        "Нужно выбрать другую целевую категорию.",
                         nameof(request));
                 }
 
@@ -245,7 +245,7 @@ public sealed class CategoryService : ICategoryService
                     cancellationToken);
 
                 if (target.IsArchived)
-                    throw new InvalidOperationException("Products cannot be moved to an archived category.");
+                    throw new InvalidOperationException("Товары нельзя перемещать в архивную категорию.");
 
                 foreach (var product in products)
                     product.ChangeClassification(target.Id, null);
@@ -277,7 +277,7 @@ public sealed class CategoryService : ICategoryService
                             cancellationToken))
                     {
                         throw new InvalidOperationException(
-                            $"'{product.Name}' məhsulu sifariş və ya alış tarixçəsində istifadə olunub. Kateqoriyanı məhsulları ilə birlikdə arxivləyin.");
+                            $"'{product.Name}' используется в истории заказов или закупок. Архивируйте категорию вместе с товарами.");
                     }
                 }
 
@@ -303,7 +303,7 @@ public sealed class CategoryService : ICategoryService
                    categoryId,
                    cancellationToken)
                ?? throw new KeyNotFoundException(
-                   "Category was not found.");
+                   "Категория не найдена.");
     }
 
     private async Task<CategoryDto> MapAsync(
@@ -335,7 +335,7 @@ public sealed class CategoryService : ICategoryService
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException(
-                "Category name is required.",
+                "Название категории обязательно.",
                 nameof(name));
         }
 

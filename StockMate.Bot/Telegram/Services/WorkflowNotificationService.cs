@@ -40,17 +40,17 @@ public class WorkflowNotificationService : IWorkflowNotificationService
         var order = await _orderService.GetByOrderNumberAsync(
             orderNumber,
             cancellationToken)
-            ?? throw new KeyNotFoundException("Order was not found.");
+            ?? throw new KeyNotFoundException("Заказ не найден.");
         var customer = await _customerService.GetByIdAsync(
             order.CustomerId,
             cancellationToken)
-            ?? throw new KeyNotFoundException("Customer was not found.");
+            ?? throw new KeyNotFoundException("Клиент не найден.");
 
         await SafeSendAsync(
             _options.AdminUserId,
-            $"🆕 Yeni sifariş #{orderNumber}\n" +
-            $"Müştəri: {GetCustomerName(customer.FirstName, customer.LastName)}\n" +
-            $"Məbləğ: {order.ProductsTotal:0.00} AZN",
+            $"🆕 Новый заказ #{orderNumber}\n" +
+            $"Клиент: {GetCustomerName(customer.FirstName, customer.LastName)}\n" +
+            $"Сумма: {order.ProductsTotal:0.00} AZN",
             cancellationToken);
     }
 
@@ -59,23 +59,23 @@ public class WorkflowNotificationService : IWorkflowNotificationService
         CancellationToken cancellationToken = default)
     {
         var order = await _orderService.GetByOrderNumberAsync(orderNumber, cancellationToken)
-            ?? throw new KeyNotFoundException("Order was not found.");
+            ?? throw new KeyNotFoundException("Заказ не найден.");
         var customer = await _customerService.GetByIdAsync(order.CustomerId, cancellationToken)
-            ?? throw new KeyNotFoundException("Customer was not found.");
+            ?? throw new KeyNotFoundException("Клиент не найден.");
 
         await SafeSendAsync(
             customer.TelegramUserId,
-            $"✅ Sifarişiniz təsdiqləndi.\n\n" +
-            $"Sifariş nömrəsi: #{orderNumber}\n" +
-            "Sifarişiniz hazırlanma mərhələsinə keçəcək.",
+            $"✅ Ваш заказ подтверждён.\n\n" +
+            $"Номер заказа: #{orderNumber}\n" +
+            "Ваш заказ перейдёт на этап подготовки.",
             cancellationToken);
 
         if (_options.AdminUserId > 0)
         {
             await SafeSendAsync(
                 _options.AdminUserId,
-                $"✅ Sifariş #{orderNumber} təsdiqləndi.\n" +
-                $"Müştəri: {GetCustomerName(customer.FirstName, customer.LastName)}",
+                $"✅ Заказ №{orderNumber} подтверждён.\n" +
+                $"Клиент: {GetCustomerName(customer.FirstName, customer.LastName)}",
                 cancellationToken);
         }
     }
@@ -88,14 +88,14 @@ public class WorkflowNotificationService : IWorkflowNotificationService
     {
         await SafeSendAsync(
             workerTelegramUserId,
-            $"📋 Sizə sifariş #{orderNumber} təyin edildi.",
+            $"📋 Вам назначен заказ №{orderNumber}.",
             cancellationToken);
 
         if (_options.AdminUserId > 0)
         {
             await SafeSendAsync(
                 _options.AdminUserId,
-                $"👷 Sifariş #{orderNumber} işçiyə təyin edildi.\nİşçi: {workerName}",
+                $"👷 Заказ №{orderNumber} назначен сотруднику.\nСотрудник: {workerName}",
                 cancellationToken);
         }
     }
@@ -107,37 +107,37 @@ public class WorkflowNotificationService : IWorkflowNotificationService
         CancellationToken cancellationToken = default)
     {
         var order = await _orderService.GetByOrderNumberAsync(orderNumber, cancellationToken)
-            ?? throw new KeyNotFoundException("Order was not found.");
+            ?? throw new KeyNotFoundException("Заказ не найден.");
         var customer = await _customerService.GetByIdAsync(order.CustomerId, cancellationToken)
-            ?? throw new KeyNotFoundException("Customer was not found.");
+            ?? throw new KeyNotFoundException("Клиент не найден.");
         var customerName = GetCustomerName(customer.FirstName, customer.LastName);
 
         var adminText = status switch
         {
-            ShipmentStatus.Preparing => "hazırlamağa başladı",
-            ShipmentStatus.Ready => "hazır olduğunu bildirdi",
-            ShipmentStatus.OutForDelivery => "çatdırılmağa götürdü",
-            ShipmentStatus.Delivered => "çatdırıldığını bildirdi",
-            ShipmentStatus.Cancelled => "çatdırılmanı ləğv etdi",
-            _ => "statusu dəyişdi"
+            ShipmentStatus.Preparing => "начал подготовку",
+            ShipmentStatus.Ready => "сообщил о готовности",
+            ShipmentStatus.OutForDelivery => "принял в доставку",
+            ShipmentStatus.Delivered => "сообщил о доставке",
+            ShipmentStatus.Cancelled => "отменил доставку",
+            _ => "изменил статус"
         };
 
         if (_options.AdminUserId > 0)
         {
             await SafeSendAsync(
                 _options.AdminUserId,
-                $"📦 Sifariş #{orderNumber} — Müştəri: {customerName}\n" +
+                $"📦 Заказ №{orderNumber} — Клиент: {customerName}\n" +
                 $"👷 {workerName} {adminText}.",
                 cancellationToken);
         }
 
         var customerText = status switch
         {
-            ShipmentStatus.Ready => "✅ Sifarişiniz hazırdır. Tezliklə çatdırılmağa veriləcək.",
-            ShipmentStatus.OutForDelivery => "🚚 Sifarişiniz çatdırılmağa verildi.",
+            ShipmentStatus.Ready => "✅ Ваш заказ готов. Скоро он будет передан в доставку.",
+            ShipmentStatus.OutForDelivery => "🚚 Ваш заказ передан в доставку.",
             ShipmentStatus.Delivered when order.RemainingQuantity > 0 =>
-                $"✅ Sifarişinizin bir hissəsi çatdırıldı. Qalan məhsul sayı: {order.RemainingQuantity}.",
-            ShipmentStatus.Delivered => "✅ Sifarişiniz tam çatdırıldı.",
+                $"✅ Часть вашего заказа доставлена. Осталось товаров: {order.RemainingQuantity}.",
+            ShipmentStatus.Delivered => "✅ Ваш заказ доставлен полностью.",
             _ => null
         };
 
@@ -145,7 +145,7 @@ public class WorkflowNotificationService : IWorkflowNotificationService
         {
             await SafeSendAsync(
                 customer.TelegramUserId,
-                $"{customerText}\n\nSifariş: #{orderNumber}",
+                $"{customerText}\n\nЗаказ: №{orderNumber}",
                 cancellationToken);
         }
     }

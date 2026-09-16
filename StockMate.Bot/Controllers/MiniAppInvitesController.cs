@@ -30,7 +30,7 @@ public sealed class MiniAppInvitesController : ControllerBase
 
         if (string.IsNullOrWhiteSpace(bot.Username))
             throw new InvalidOperationException(
-                "Telegram bot username is not available.");
+                "Имя пользователя Telegram-бота недоступно.");
 
         var token = await _invites.CreateAsync(cancellationToken);
         return Ok(new TelegramInviteLinkResponse(

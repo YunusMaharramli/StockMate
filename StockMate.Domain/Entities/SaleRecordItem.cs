@@ -14,7 +14,7 @@ public sealed class SaleRecordItem
         if (saleRecordId == Guid.Empty)
         {
             throw new ArgumentException(
-                "Sale record ID is required.",
+                "ID записи о продаже обязателен.",
                 nameof(saleRecordId));
         }
 
@@ -22,13 +22,13 @@ public sealed class SaleRecordItem
         {
             throw new ArgumentOutOfRangeException(
                 nameof(quantity),
-                "Quantity must be greater than zero.");
+                "Количество должно быть больше нуля.");
         }
 
         if (quantity > orderItem.TotalQuantity)
         {
             throw new InvalidOperationException(
-                "Sale quantity cannot exceed the ordered quantity.");
+                "Количество продажи не может превышать заказанное количество.");
         }
 
         Id = Guid.NewGuid();

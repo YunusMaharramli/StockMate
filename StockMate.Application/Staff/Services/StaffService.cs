@@ -43,7 +43,7 @@ public class StaffService : IStaffService
         {
             if (existing.Role != StaffRole.Admin)
                 throw new InvalidOperationException(
-                    "Configured admin Telegram ID belongs to a worker.");
+                    "Указанный Telegram ID администратора принадлежит сотруднику.");
 
             if (!existing.IsActive)
                 existing.Activate();
@@ -74,7 +74,7 @@ public class StaffService : IStaffService
 
         if (existing is not null)
             throw new InvalidOperationException(
-                "A staff member with this Telegram ID already exists.");
+                "Сотрудник с таким Telegram ID уже существует.");
 
         var worker = new StaffEntity(
             request.TelegramUserId,
@@ -123,7 +123,7 @@ public class StaffService : IStaffService
         var staff = await GetRequiredStaffAsync(staffId, cancellationToken);
 
         if (staff.Role == StaffRole.Admin)
-            throw new InvalidOperationException("Admin cannot be deactivated.");
+            throw new InvalidOperationException("Администратора нельзя деактивировать.");
 
         var assignments = await _assignmentRepository.GetActiveByStaffIdAsync(
             staff.Id, cancellationToken);
@@ -159,7 +159,7 @@ public class StaffService : IStaffService
     {
         return await _staffRepository.GetByIdAsync(staffId, cancellationToken)
             ?? throw new KeyNotFoundException(
-                $"Staff member '{staffId}' was not found.");
+                $"Сотрудник '{staffId}' не найден.");
     }
 
     private static StaffDto MapStaff(StaffEntity staff)

@@ -146,8 +146,8 @@ public class TelegramPollingService : BackgroundService
         {
             await _botClient.SendMessage(
                 chatId,
-                "Əməliyyatı yerinə yetirmək mümkün olmadı. " +
-                "Məlumatları yoxlayıb yenidən cəhd edin.");
+                "Не удалось выполнить операцию. " +
+                "Проверьте данные и повторите попытку.");
         }
         catch (Exception exception)
         {

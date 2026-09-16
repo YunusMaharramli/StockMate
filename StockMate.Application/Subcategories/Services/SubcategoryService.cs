@@ -30,12 +30,12 @@ public sealed class SubcategoryService : ISubcategoryService
                            request.CategoryId,
                            cancellationToken)
                        ?? throw new KeyNotFoundException(
-                           "Category was not found.");
+                           "Категория не найдена.");
 
         if (category.IsArchived)
         {
             throw new InvalidOperationException(
-                "A subcategory cannot be created under an archived category.");
+                "Нельзя создать подкатегорию в архивной категории.");
         }
 
         var normalizedName = NormalizeName(request.Name);
@@ -48,7 +48,7 @@ public sealed class SubcategoryService : ISubcategoryService
         if (nameExists)
         {
             throw new InvalidOperationException(
-                $"A subcategory named '{request.Name.Trim()}' already exists in this category.");
+                $"Подкатегория с названием '{request.Name.Trim()}' уже существует в этой категории.");
         }
 
         var subcategory = new SubcategoryEntity(
@@ -155,7 +155,7 @@ public sealed class SubcategoryService : ISubcategoryService
         if (nameExists)
         {
             throw new InvalidOperationException(
-                $"Another subcategory named '{request.Name.Trim()}' already exists in this category.");
+                $"Другая подкатегория с названием '{request.Name.Trim()}' уже существует в этой категории.");
         }
 
         subcategory.Rename(request.Name);
@@ -180,12 +180,12 @@ public sealed class SubcategoryService : ISubcategoryService
                                subcategory.CategoryId,
                                cancellationToken)
                            ?? throw new KeyNotFoundException(
-                               "Category was not found.");
+                               "Категория не найдена.");
 
             if (category.IsArchived)
             {
                 throw new InvalidOperationException(
-                    "A subcategory under an archived category cannot be activated.");
+                    "Подкатегорию в архивной категории нельзя активировать.");
             }
 
             subcategory.Activate();
@@ -225,7 +225,7 @@ public sealed class SubcategoryService : ISubcategoryService
                            subcategory.CategoryId,
                            cancellationToken)
                        ?? throw new KeyNotFoundException(
-                           "Category was not found.");
+                           "Категория не найдена.");
 
         if (category.IsArchived)
         {
@@ -287,7 +287,7 @@ public sealed class SubcategoryService : ISubcategoryService
                     request.TargetSubcategoryId.Value == subcategoryId)
                 {
                     throw new ArgumentException(
-                        "A different target subcategory is required.",
+                        "Нужно выбрать другую целевую подкатегорию.",
                         nameof(request));
                 }
 
@@ -296,15 +296,15 @@ public sealed class SubcategoryService : ISubcategoryService
                     cancellationToken);
 
                 if (target.IsArchived)
-                    throw new InvalidOperationException("Products cannot be moved to an archived subcategory.");
+                    throw new InvalidOperationException("Товары нельзя перемещать в архивную подкатегорию.");
 
                 var targetCategory = await _categoryRepository.GetByIdAsync(
                     target.CategoryId,
                     cancellationToken)
-                    ?? throw new KeyNotFoundException("The target category was not found.");
+                    ?? throw new KeyNotFoundException("Целевая категория не найдена.");
 
                 if (targetCategory.IsArchived)
-                    throw new InvalidOperationException("Products cannot be moved to an archived category.");
+                    throw new InvalidOperationException("Товары нельзя перемещать в архивную категорию.");
 
                 foreach (var product in products)
                     product.ChangeClassification(target.CategoryId, target.Id);
@@ -332,7 +332,7 @@ public sealed class SubcategoryService : ISubcategoryService
                             cancellationToken))
                     {
                         throw new InvalidOperationException(
-                            $"'{product.Name}' məhsulu sifariş və ya alış tarixçəsində istifadə olunub. Alt kateqoriyanı məhsulları ilə birlikdə arxivləyin.");
+                            $"'{product.Name}' используется в истории заказов или закупок. Архивируйте подкатегорию вместе с товарами.");
                     }
                 }
 
@@ -357,7 +357,7 @@ public sealed class SubcategoryService : ISubcategoryService
                    subcategoryId,
                    cancellationToken)
                ?? throw new KeyNotFoundException(
-                   "Subcategory was not found.");
+                   "Подкатегория не найдена.");
     }
 
     private async Task<SubcategoryDto> MapAsync(
@@ -368,7 +368,7 @@ public sealed class SubcategoryService : ISubcategoryService
                            subcategory.CategoryId,
                            cancellationToken)
                        ?? throw new KeyNotFoundException(
-                           "The parent category of the subcategory was not found.");
+                           "Родительская категория подкатегории не найдена.");
 
         return await MapAsync(
             subcategory,
@@ -402,7 +402,7 @@ public sealed class SubcategoryService : ISubcategoryService
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException(
-                "Subcategory name is required.",
+                "Название подкатегории обязательно.",
                 nameof(name));
         }
 

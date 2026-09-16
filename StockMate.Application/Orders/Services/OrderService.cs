@@ -46,14 +46,14 @@ public class OrderService : IOrderService
         if (customerAddressId == Guid.Empty)
         {
             throw new ArgumentException(
-                "Customer address ID is required.",
+                "ID адреса клиента обязателен.",
                 nameof(customerAddressId));
         }
 
         if (deliveryCompanyId == Guid.Empty)
         {
             throw new ArgumentException(
-                "Delivery company ID is required.",
+                "ID службы доставки обязателен.",
                 nameof(deliveryCompanyId));
         }
 
@@ -62,12 +62,12 @@ public class OrderService : IOrderService
                 telegramUserId,
                 cancellationToken)
             ?? throw new KeyNotFoundException(
-                $"Customer with Telegram ID '{telegramUserId}' was not found.");
+                $"Клиент с Telegram ID '{telegramUserId}' не найден.");
 
         if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
         {
             throw new InvalidOperationException(
-                "Phone number is required.");
+                "Номер телефона обязателен.");
         }
 
         var address =
@@ -75,18 +75,18 @@ public class OrderService : IOrderService
                 customerAddressId,
                 cancellationToken)
             ?? throw new KeyNotFoundException(
-                "Customer address was not found.");
+                "Адрес клиента не найден.");
 
         if (address.CustomerId != customer.Id)
         {
             throw new UnauthorizedAccessException(
-                "The selected address does not belong to this customer.");
+                "Выбранный адрес не принадлежит этому клиенту.");
         }
 
         if (!address.IsActive)
         {
             throw new InvalidOperationException(
-                "The selected address is inactive.");
+                "Выбранный адрес неактивен.");
         }
 
         var deliveryCompany =
@@ -94,12 +94,12 @@ public class OrderService : IOrderService
                 deliveryCompanyId,
                 cancellationToken)
             ?? throw new KeyNotFoundException(
-                "Delivery company was not found.");
+                "Служба доставки не найдена.");
 
         if (!deliveryCompany.IsActive)
         {
             throw new InvalidOperationException(
-                "The selected delivery company is inactive.");
+                "Выбранная служба доставки неактивна.");
         }
 
         return await CreateOrderAsync(
@@ -125,13 +125,13 @@ public class OrderService : IOrderService
                        customer.Id,
                        cancellationToken)
                    ?? throw new InvalidOperationException(
-                       "Customer cart was not found.");
+                       "Корзина клиента не найдена.");
 
         if (cart.IsExpired)
-            throw new InvalidOperationException("Cart has expired.");
+            throw new InvalidOperationException("Срок действия корзины истёк.");
 
         if (cart.Items.Count == 0)
-            throw new InvalidOperationException("Cart is empty.");
+            throw new InvalidOperationException("Корзина пуста.");
 
         var productIds = cart.Items
             .Select(item => item.ProductId)
@@ -175,13 +175,13 @@ public class OrderService : IOrderService
                     out var product))
             {
                 throw new KeyNotFoundException(
-                    $"Product '{cartItem.ProductId}' was not found.");
+                    $"Товар '{cartItem.ProductId}' не найден.");
             }
 
             if (!product.IsCatalogVisible)
             {
                 throw new InvalidOperationException(
-                    $"Product '{product.Name}' is no longer available in the catalog.");
+                    $"Товар '{product.Name}' больше недоступен в каталоге.");
             }
 
             var reservedQuantity =
@@ -265,7 +265,7 @@ public class OrderService : IOrderService
                     out var product))
             {
                 throw new KeyNotFoundException(
-                    $"Product '{item.ProductId}' was not found.");
+                    $"Товар '{item.ProductId}' не найден.");
             }
 
             if (item.FromStockQuantity == 0)
@@ -316,7 +316,7 @@ public class OrderService : IOrderService
                 SpecialOrderStatus.Completed))
         {
             throw new InvalidOperationException(
-                "Special-order products have not arrived yet.");
+                "Товары под заказ ещё не поступили.");
         }
 
         order.MarkAsDelivering();
@@ -474,7 +474,7 @@ public class OrderService : IOrderService
         var item = order.Items.FirstOrDefault(
                        item => item.Id == orderItemId)
                    ?? throw new KeyNotFoundException(
-                       $"Order item '{orderItemId}' was not found.");
+                       $"Элемент заказа '{orderItemId}' не найден.");
 
         switch (status)
         {
@@ -496,7 +496,7 @@ public class OrderService : IOrderService
 
             default:
                 throw new InvalidOperationException(
-                    $"Special-order status '{status}' cannot be assigned manually.");
+                    $"Статус товара под заказ '{status}' нельзя назначить вручную.");
         }
 
         await _orderRepository.SaveChangesAsync(cancellationToken);
@@ -510,7 +510,7 @@ public class OrderService : IOrderService
                    orderNumber,
                    cancellationToken)
                ?? throw new KeyNotFoundException(
-                   $"Order number '{orderNumber}' was not found.");
+                   $"Заказ с номером '{orderNumber}' не найден.");
     }
 
     private async Task RestoreUndeliveredStockAsync(
@@ -562,7 +562,7 @@ public class OrderService : IOrderService
                 shipment.Status is not ShipmentStatus.Delivered and not ShipmentStatus.Cancelled))
         {
             throw new InvalidOperationException(
-                "Active shipment must be completed or cancelled first.");
+                "Сначала нужно завершить или отменить активную доставку.");
         }
     }
 
@@ -659,7 +659,7 @@ public class OrderService : IOrderService
                 telegramUserId,
                 cancellationToken)
             ?? throw new KeyNotFoundException(
-                "Customer was not found.");
+                "Клиент не найден.");
 
         var orders =
             await _orderRepository.GetByCustomerIdAsync(
@@ -676,7 +676,7 @@ public class OrderService : IOrderService
         var customer = await _customerRepository.GetByIdAsync(
             customerId,
             cancellationToken)
-            ?? throw new KeyNotFoundException("Customer was not found.");
+            ?? throw new KeyNotFoundException("Клиент не найден.");
 
         var orders = await _orderRepository.GetByCustomerIdAsync(
             customer.Id,

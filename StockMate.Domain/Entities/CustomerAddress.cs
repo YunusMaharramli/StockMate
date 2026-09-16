@@ -14,12 +14,12 @@ public sealed class CustomerAddress
     {
         if (customerId == Guid.Empty)
             throw new ArgumentException(
-                "Customer ID is required.",
+                "ID клиента обязателен.",
                 nameof(customerId));
 
         if (string.IsNullOrWhiteSpace(addressLine))
             throw new ArgumentException(
-                "Address is required.",
+                "Адрес обязателен.",
                 nameof(addressLine));
 
         Id = Guid.NewGuid();
@@ -54,7 +54,7 @@ public sealed class CustomerAddress
     {
         if (string.IsNullOrWhiteSpace(addressLine))
             throw new ArgumentException(
-                "Address is required.",
+                "Адрес обязателен.",
                 nameof(addressLine));
 
         AddressLine = addressLine.Trim();

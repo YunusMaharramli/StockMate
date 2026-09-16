@@ -58,7 +58,7 @@ public class MiniAppCatalogController : ControllerBase
     {
 
         if (!request.CategoryId.HasValue)
-            throw new ArgumentException("Category ID is required.", nameof(request));
+            throw new ArgumentException("ID категории обязателен.", nameof(request));
 
         var product = await _productService.CreateAsync(request, cancellationToken);
         return Created($"api/miniapp/admin/products/{product.Id}", product);
@@ -115,7 +115,7 @@ public class MiniAppCatalogController : ControllerBase
                 await _productService.SetStockAsync(productId, request.Quantity, request.Reason, cancellationToken);
                 break;
             default:
-                throw new ArgumentException("Stock action must be add, remove or set.");
+                throw new ArgumentException("Действие со складом должно быть add, remove или set.");
         }
         return NoContent();
     }

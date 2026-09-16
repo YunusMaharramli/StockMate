@@ -82,7 +82,7 @@ public class GlobalExceptionHandler : IExceptionHandler
         return exception switch
         {
             DbUpdateConcurrencyException =>
-                "The data was changed by another operation. Refresh and try again.",
+                "Данные были изменены другой операцией. Обновите страницу и повторите попытку.",
 
             DbUpdateException =>
                 "The database operation conflicts with the current data.",
@@ -100,10 +100,10 @@ public class GlobalExceptionHandler : IExceptionHandler
         return statusCode switch
         {
             StatusCodes.Status400BadRequest =>
-                "Invalid request",
+                "Неверный запрос",
 
             StatusCodes.Status404NotFound =>
-                "Resource not found",
+                "Ресурс не найден",
 
             StatusCodes.Status409Conflict =>
                 "Business rule conflict",

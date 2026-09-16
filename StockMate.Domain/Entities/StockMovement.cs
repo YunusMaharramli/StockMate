@@ -17,7 +17,7 @@ public class StockMovement
         Guid? orderId = null)
     {
         if (productId == Guid.Empty)
-            throw new ArgumentException("Product ID is required.", nameof(productId));
+            throw new ArgumentException("ID товара обязателен.", nameof(productId));
 
         if (previousQuantity < 0)
             throw new ArgumentOutOfRangeException(nameof(previousQuantity));
@@ -26,7 +26,7 @@ public class StockMovement
             throw new ArgumentOutOfRangeException(nameof(newQuantity));
 
         if (string.IsNullOrWhiteSpace(reason))
-            throw new ArgumentException("Movement reason is required.", nameof(reason));
+            throw new ArgumentException("Причина движения обязательна.", nameof(reason));
 
         Id = Guid.NewGuid();
         ProductId = productId;

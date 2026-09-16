@@ -25,7 +25,7 @@ public sealed class SaleRecordingService
         if (deliveredQuantities.Count == 0)
         {
             throw new InvalidOperationException(
-                "A sale record must contain at least one product.");
+                "Запись о продаже должна содержать хотя бы один товар.");
         }
 
         if (shipmentId.HasValue &&
@@ -34,7 +34,7 @@ public sealed class SaleRecordingService
                 cancellationToken))
         {
             throw new InvalidOperationException(
-                "A sale record already exists for this shipment.");
+                "Для этой доставки уже есть запись о продаже.");
         }
 
         var orderItems = order.Items.ToDictionary(
@@ -52,7 +52,7 @@ public sealed class SaleRecordingService
                     out var orderItem))
             {
                 throw new KeyNotFoundException(
-                    $"Order item '{deliveredItem.Key}' was not found.");
+                    $"Элемент заказа '{deliveredItem.Key}' не найден.");
             }
 
             saleRecord.AddItem(

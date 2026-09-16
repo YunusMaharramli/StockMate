@@ -47,7 +47,7 @@ public sealed class DeliveryCompanyService
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             throw new ArgumentException(
-                "Delivery company name is required.",
+                "Название службы доставки обязательно.",
                 nameof(request.Name));
         }
 
@@ -56,7 +56,7 @@ public sealed class DeliveryCompanyService
                 cancellationToken: cancellationToken))
         {
             throw new InvalidOperationException(
-                "A delivery company with this name already exists.");
+                "Служба доставки с таким названием уже существует.");
         }
 
         var company = new DeliveryCompany(request.Name);
@@ -79,7 +79,7 @@ public sealed class DeliveryCompanyService
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             throw new ArgumentException(
-                "Delivery company name is required.",
+                "Название службы доставки обязательно.",
                 nameof(request.Name));
         }
 
@@ -93,7 +93,7 @@ public sealed class DeliveryCompanyService
                 cancellationToken: cancellationToken))
         {
             throw new InvalidOperationException(
-                "A delivery company with this name already exists.");
+                "Служба доставки с таким названием уже существует.");
         }
 
         company.Rename(request.Name);
@@ -130,7 +130,7 @@ public sealed class DeliveryCompanyService
                    companyId,
                    cancellationToken)
                ?? throw new KeyNotFoundException(
-                   "Delivery company was not found.");
+                   "Служба доставки не найдена.");
     }
 
     private static DeliveryCompanyDto MapCompany(

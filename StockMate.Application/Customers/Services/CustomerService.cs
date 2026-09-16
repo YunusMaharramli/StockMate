@@ -117,7 +117,7 @@ public class CustomerService : ICustomerService
                    telegramUserId,
                    cancellationToken)
                ?? throw new KeyNotFoundException(
-                   $"Customer with Telegram ID '{telegramUserId}' was not found.");
+                   $"Клиент с Telegram ID '{telegramUserId}' не найден.");
     }
 
     private static CustomerDto MapCustomer(Customer customer)
@@ -164,7 +164,7 @@ public class CustomerService : ICustomerService
             customerId,
             cancellationToken)
             ?? throw new KeyNotFoundException(
-                $"Customer with ID '{customerId}' was not found.");
+                $"Клиент с ID '{customerId}' не найден.");
 
         customer.Block();
         await _customerRepository.SaveChangesAsync(cancellationToken);

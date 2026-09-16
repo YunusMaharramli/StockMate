@@ -36,7 +36,7 @@ public sealed class MiniAppCustomerProfileController : ControllerBase
         var customer = await _customers.GetByTelegramUserIdAsync(
             identity.TelegramUserId,
             cancellationToken)
-            ?? throw new KeyNotFoundException("Müştəri tapılmadı.");
+            ?? throw new KeyNotFoundException("Клиент не найден.");
 
         return Ok(new CustomerProfileResponse(
             customer.FirstName,

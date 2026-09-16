@@ -8,8 +8,8 @@ public class OrderShipment
 
     public OrderShipment(Guid orderId, Guid staffId)
     {
-        if (orderId == Guid.Empty) throw new ArgumentException("Order ID is required.", nameof(orderId));
-        if (staffId == Guid.Empty) throw new ArgumentException("Staff ID is required.", nameof(staffId));
+        if (orderId == Guid.Empty) throw new ArgumentException("ID заказа обязателен.", nameof(orderId));
+        if (staffId == Guid.Empty) throw new ArgumentException("ID сотрудника обязателен.", nameof(staffId));
 
         Id = Guid.NewGuid();
         OrderId = orderId;
@@ -60,7 +60,7 @@ public class OrderShipment
     public void Cancel()
     {
         if (Status is ShipmentStatus.Delivered or ShipmentStatus.Cancelled)
-            throw new InvalidOperationException("Shipment cannot be cancelled.");
+            throw new InvalidOperationException("Доставку нельзя отменить.");
 
         Status = ShipmentStatus.Cancelled;
         CancelledAtUtc = DateTime.UtcNow;
@@ -69,6 +69,6 @@ public class OrderShipment
     private void EnsureStatus(ShipmentStatus required)
     {
         if (Status != required)
-            throw new InvalidOperationException($"Shipment must be in {required} status.");
+            throw new InvalidOperationException($"Доставка должна иметь статус {required}.");
     }
 }

@@ -15,7 +15,7 @@ public sealed class StockPurchase
         if (purchasedAtUtc == default)
         {
             throw new ArgumentException(
-                "Purchase date is required.",
+                "Дата закупки обязательна.",
                 nameof(purchasedAtUtc));
         }
 
@@ -55,7 +55,7 @@ public sealed class StockPurchase
                 item.ProductId == product.Id))
         {
             throw new InvalidOperationException(
-                "The product already exists in this purchase.");
+                "Товар уже есть в этой закупке.");
         }
 
         var item = new StockPurchaseItem(

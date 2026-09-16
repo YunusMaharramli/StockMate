@@ -18,7 +18,7 @@ public class Customer
             throw new ArgumentOutOfRangeException(nameof(telegramUserId));
 
         if (string.IsNullOrWhiteSpace(firstName))
-            throw new ArgumentException("First name is required.", nameof(firstName));
+            throw new ArgumentException("Имя обязательно.", nameof(firstName));
 
         Id = Guid.NewGuid();
         TelegramUserId = telegramUserId;
@@ -63,7 +63,7 @@ public class Customer
         string? username)
     {
         if (string.IsNullOrWhiteSpace(firstName))
-            throw new ArgumentException("First name is required.", nameof(firstName));
+            throw new ArgumentException("Имя обязательно.", nameof(firstName));
 
         FirstName = firstName.Trim();
         LastName = lastName?.Trim();
@@ -78,10 +78,10 @@ public class Customer
         double? longitude = null)
     {
         if (string.IsNullOrWhiteSpace(phoneNumber))
-            throw new ArgumentException("Phone number is required.", nameof(phoneNumber));
+            throw new ArgumentException("Номер телефона обязателен.", nameof(phoneNumber));
 
         if (string.IsNullOrWhiteSpace(deliveryAddress))
-            throw new ArgumentException("Delivery address is required.", nameof(deliveryAddress));
+            throw new ArgumentException("Адрес доставки обязателен.", nameof(deliveryAddress));
 
         PhoneNumber = phoneNumber.Trim();
         DeliveryAddress = deliveryAddress.Trim();
@@ -95,7 +95,7 @@ public class Customer
         if (!AllowedPageSizes.Contains(pageSize))
             throw new ArgumentOutOfRangeException(
                 nameof(pageSize),
-                "Page size must be 5, 10 or 20.");
+                "Размер страницы должен быть 5, 10 или 20.");
 
         ProductPageSize = pageSize;
         UpdatedAtUtc = DateTime.UtcNow;
@@ -107,7 +107,7 @@ public class Customer
             phoneNumber.Count(char.IsDigit) < 9)
         {
             throw new ArgumentException(
-                "Telefon nömrəsini düzgün formatda yazın.",
+                "Введите номер телефона в правильном формате.",
                 nameof(phoneNumber));
         }
 

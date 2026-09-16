@@ -113,7 +113,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "Əməliyyat ləğv edildi.");
+                "Операция отменена.");
 
             if (message.From.Id == _telegramOptions.AdminUserId)
             {
@@ -152,7 +152,7 @@ public class TelegramUpdateHandler
 
         await _botClient.SendMessage(
             chatId: message.Chat.Id,
-            text: "Zəhmət olmasa menyudan seçim edin.");
+            text: "Пожалуйста, выберите пункт меню.");
     }
 
     public async Task HandleUpdateAsync(Update update)
@@ -179,7 +179,7 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Bu əməliyyat yalnız admin üçündür.");
+                "Эта операция доступна только администратору.");
 
             return;
         }
@@ -257,7 +257,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     chatId,
-                    "Çatdırılma seçimi tamamlanmayıb. Ünvanı yenidən seçin.");
+                    "Выбор доставки не завершён. Выберите адрес заново.");
                 await BeginCheckoutAsync(telegramUserId, chatId);
                 return;
             }
@@ -271,10 +271,10 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 chatId,
-                $"✅ Sifarişiniz qəbul edildi.\n\n" +
-                $"Sifariş nömrəsi: #{order.OrderNumber}\n" +
-                $"Məhsullar: {order.ProductsTotal:0.00} AZN\n" +
-                "Çatdırılma haqqı adminlə razılaşdırılacaq.");
+                $"✅ Ваш заказ принят.\n\n" +
+                $"Номер заказа: #{order.OrderNumber}\n" +
+                $"Товары: {order.ProductsTotal:0.00} AZN\n" +
+                "Стоимость доставки будет согласована с администратором.");
 
             if (_telegramOptions.AdminUserId > 0)
             {
@@ -332,7 +332,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 chatId,
-                "Axtarmaq istədiyiniz məhsulun adını və ya kodunu yazın.");
+                "Введите название или код товара для поиска.");
             return;
         }
 
@@ -402,7 +402,7 @@ public class TelegramUpdateHandler
                 {
                     await _botClient.SendMessage(
                         chatId,
-                        "Bu ünvan artıq aktiv deyil. Başqa ünvan seçin.");
+                        "Этот адрес больше не активен. Выберите другой адрес.");
                     await ShowAddressSelectionAsync(telegramUserId, chatId);
                     return;
                 }
@@ -439,7 +439,7 @@ public class TelegramUpdateHandler
                 {
                     await _botClient.SendMessage(
                         chatId,
-                        "Bu çatdırılma şirkəti artıq aktiv deyil. Başqa şirkət seçin.");
+                        "Эта служба доставки больше не активна. Выберите другую службу.");
                     await ShowDeliveryCompanySelectionAsync(telegramUserId, chatId);
                     return;
                 }
@@ -462,7 +462,7 @@ public class TelegramUpdateHandler
         if (query.Data == "checkout:cancel")
         {
             _sessionStore.Clear(telegramUserId);
-            await _botClient.SendMessage(chatId, "Sifarişin rəsmiləşdirilməsi dayandırıldı.");
+            await _botClient.SendMessage(chatId, "Оформление заказа остановлено.");
             await SendCartAsync(telegramUserId, chatId);
             return;
         }
@@ -478,8 +478,8 @@ public class TelegramUpdateHandler
 
                 await _botClient.SendMessage(
                     chatId,
-                    "Məhsul sayını rəqəmlə yazın (1–99).\n" +
-                    "Ləğv etmək üçün /cancel yazın.");
+                    "Введите количество товара числом от 1 до 99.\n" +
+                    "Для отмены отправьте /cancel.");
             }
 
             return;
@@ -490,7 +490,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.AnswerCallbackQuery(
                     query.Id,
-                    "Bu əməliyyat yalnız admin üçündür.",
+                    "Эта операция доступна только администратору.",
                     showAlert: true);
 
                 return;
@@ -511,28 +511,28 @@ public class TelegramUpdateHandler
             var order =
                 await _orderService.GetByOrderNumberAsync(orderNumber)
                 ?? throw new KeyNotFoundException(
-                    "Order was not found.");
+                    "Заказ не найден.");
 
             var customer =
                 await _customerService.GetByIdAsync(order.CustomerId)
                 ?? throw new KeyNotFoundException(
-                    "Customer was not found.");
+                    "Клиент не найден.");
 
             await _botClient.AnswerCallbackQuery(
                 query.Id,
-                $"Sifariş #{orderNumber} təsdiqləndi.",
+                $"Заказ №{orderNumber} подтверждён.",
                 showAlert: true);
 
             await _botClient.SendMessage(
                 query.Message.Chat.Id,
-                $"✅ Sifariş #{orderNumber} admin tərəfindən təsdiqləndi.\n" +
-                $"Status: {order.Status}");
+                $"✅ Заказ №{orderNumber} подтверждён администратором.\n" +
+                $"Статус: {order.Status}");
 
             await _botClient.SendMessage(
                 customer.TelegramUserId,
-                $"✅ Sifarişiniz təsdiqləndi.\n\n" +
-                $"Sifariş nömrəsi: #{orderNumber}\n" +
-                "Hazırda sifarişiniz hazırlanma mərhələsinə keçəcək.");
+                $"✅ Ваш заказ подтверждён.\n\n" +
+                $"Номер заказа: #{orderNumber}\n" +
+                "Теперь ваш заказ перейдёт на этап подготовки.");
             await SendAdminOrderActionsAsync(
                 chatId,
                 orderNumber);
@@ -553,7 +553,7 @@ public class TelegramUpdateHandler
 
             await NotifyOrderStatusAsync(
                 orderNumber,
-                "⏳ Sifarişinizin bütün məhsulları birlikdə çatdırılacaq. Hazır olduqda sizə məlumat veriləcək.");
+                "⏳ Все товары вашего заказа будут доставлены вместе. Мы сообщим, когда заказ будет готов.");
 
             await SendAdminOrderActionsAsync(chatId, orderNumber);
             return;
@@ -582,7 +582,7 @@ public class TelegramUpdateHandler
                 return;
 
             var before = await _orderService.GetByOrderNumberAsync(orderNumber)
-                ?? throw new KeyNotFoundException("Order was not found.");
+                ?? throw new KeyNotFoundException("Заказ не найден.");
 
             var order = await _orderService.DeliverReadyItemsAsync(orderNumber);
             var deliveredText = new StringBuilder();
@@ -595,16 +595,16 @@ public class TelegramUpdateHandler
                 var deliveredNow = item.DeliveredQuantity - previous;
 
                 if (deliveredNow > 0)
-                    deliveredText.AppendLine($"• {item.ProductName}: {deliveredNow} ədəd");
+                    deliveredText.AppendLine($"• {item.ProductName}: {deliveredNow} шт.");
             }
 
             await NotifyOrderStatusAsync(
                 orderNumber,
-                $"🚚 Sifarişinizdən aşağıdakı məhsullar göndərildi:\n\n" +
+                $"🚚 Из вашего заказа отправлены следующие товары:\n\n" +
                 deliveredText +
                 (order.RemainingQuantity > 0
-                    ? $"\nQalan məhsul sayı: {order.RemainingQuantity}. Hazır olduqda sizə məlumat veriləcək."
-                    : "\nSifarişiniz tam çatdırıldı."));
+                    ? $"\nОсталось товаров: {order.RemainingQuantity}. Мы сообщим, когда товары будут готовы."
+                    : "\nВаш заказ доставлен полностью."));
 
             await SendAdminOrderActionsAsync(chatId, orderNumber);
             return;
@@ -619,14 +619,14 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 chatId,
-                $"Sifariş #{orderNumber} üzrə qalan hissə ləğv edilsin?",
+                $"Заказ №{orderNumber}: отменить оставшуюся часть?",
                 replyMarkup: new InlineKeyboardMarkup(
                     new[]
                     {
                         new[]
                         {
                             InlineKeyboardButton.WithCallbackData(
-                                "Bəli, qalanı ləğv et",
+                                "Да, отменить остаток",
                                 $"admin:cancel-rem-confirm:{orderNumber}"),
                             InlineKeyboardButton.WithCallbackData(
                                 "Xeyr",
@@ -648,7 +648,7 @@ public class TelegramUpdateHandler
 
             await NotifyOrderStatusAsync(
                 orderNumber,
-                "Qalan çatdırılmamış məhsullar admin tərəfindən ləğv edildi.");
+                "Оставшиеся недоставленные товары отменены администратором.");
 
             await SendAdminOrderActionsAsync(chatId, orderNumber);
             return;
@@ -665,7 +665,7 @@ public class TelegramUpdateHandler
 
             await NotifyOrderStatusAsync(
                 orderNumber,
-                "📦 Sifarişiniz hazırlanır.");
+                "📦 Ваш заказ готовится.");
 
             await SendAdminOrderActionsAsync(
                 chatId,
@@ -686,7 +686,7 @@ public class TelegramUpdateHandler
 
             await NotifyOrderStatusAsync(
                 orderNumber,
-                "🚚 Sifarişiniz çatdırılmağa verildi.");
+                "🚚 Ваш заказ передан в доставку.");
 
             await SendAdminOrderActionsAsync(
                 chatId,
@@ -707,11 +707,11 @@ public class TelegramUpdateHandler
 
             await NotifyOrderStatusAsync(
                 orderNumber,
-                "✅ Sifarişiniz tamamlandı.");
+                "✅ Ваш заказ завершён.");
 
             await _botClient.SendMessage(
                 chatId,
-                $"✅ Sifariş #{orderNumber} tamamlandı.");
+                $"✅ Заказ №{orderNumber} завершён.");
 
             return;
         }
@@ -726,14 +726,14 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 chatId,
-                $"Sifariş #{orderNumber} ləğv edilsin?",
+                $"Заказ №{orderNumber}: отменить заказ?",
                 replyMarkup: new InlineKeyboardMarkup(
                     new[]
                     {
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData(
-                        "Bəli, ləğv et",
+                        "Да, отменить",
                         $"admin:cancel-confirm:{orderNumber}"),
 
                     InlineKeyboardButton.WithCallbackData(
@@ -755,15 +755,15 @@ public class TelegramUpdateHandler
 
             await _orderService.CancelAsync(
                 orderNumber,
-                "Admin tərəfindən ləğv edildi.");
+                "Отменено администратором.");
 
             await NotifyOrderStatusAsync(
                 orderNumber,
-                "❌ Sifarişiniz admin tərəfindən ləğv edildi.");
+                "❌ Ваш заказ отменён администратором.");
 
             await _botClient.SendMessage(
                 chatId,
-                $"Sifariş #{orderNumber} ləğv edildi.");
+                $"Заказ №{orderNumber} отменён.");
 
             return;
         }
@@ -793,11 +793,11 @@ public class TelegramUpdateHandler
 
             var currentOrder =
                 await _orderService.GetByOrderNumberAsync(currentOrderNumber)
-                ?? throw new KeyNotFoundException("Order was not found.");
+                ?? throw new KeyNotFoundException("Заказ не найден.");
 
             var customer =
                 await _customerService.GetByIdAsync(currentOrder.CustomerId)
-                ?? throw new KeyNotFoundException("Customer was not found.");
+                ?? throw new KeyNotFoundException("Клиент не найден.");
 
             var orders = (await _orderService.GetCustomerOrdersAsync(
                     customer.TelegramUserId))
@@ -817,14 +817,14 @@ public class TelegramUpdateHandler
             rows.Add(
             [
                 InlineKeyboardButton.WithCallbackData(
-                    $"⬅️ Sifariş #{currentOrderNumber}",
+                    $"⬅️ Заказ #{currentOrderNumber}",
                     $"admin:actions:{currentOrderNumber}")
             ]);
 
             await _botClient.SendMessage(
                 chatId,
                 $"👤 {customer.FirstName} {customer.LastName}\n\n" +
-                "Müştərinin digər sifarişləri:",
+                "Другие заказы клиента:",
                 replyMarkup: new InlineKeyboardMarkup(rows));
 
             return;
@@ -852,7 +852,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 chatId,
-                "✅ Məhsul səbətə əlavə edildi.");
+                "✅ Товар добавлен в корзину.");
 
             return;
         }
@@ -912,7 +912,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 chatId,
-                "🗑 Səbət təmizləndi.");
+                "🗑 Корзина очищена.");
 
             return;
         }
@@ -959,9 +959,9 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 chatId,
-                "İşçinin Telegram ID-sini yazın.\n\n" +
-                "İşçi öz botunda /myid yazaraq ID-ni görə bilər.\n" +
-                "Ləğv etmək üçün /cancel yazın.");
+                "Введите Telegram ID сотрудника.\n\n" +
+                "Сотрудник может узнать свой ID, отправив /myid в боте.\n" +
+                "Для отмены отправьте /cancel.");
             return;
         }
 
@@ -1008,7 +1008,7 @@ public class TelegramUpdateHandler
             {
                 var admin = await GetRequiredAdminStaffAsync(telegramUserId);
                 await _assignmentService.AssignAsync(orderNumber, workerId, admin.Id);
-                await _botClient.SendMessage(chatId, "✅ Sifariş işçiyə təyin edildi.");
+                await _botClient.SendMessage(chatId, "✅ Заказ назначен сотруднику.");
                 await SendAdminOrderActionsAsync(chatId, orderNumber);
             }
             return;
@@ -1020,7 +1020,7 @@ public class TelegramUpdateHandler
             {
                 var admin = await GetRequiredAdminStaffAsync(telegramUserId);
                 await _assignmentService.ReleaseAsync(orderNumber, admin.Id);
-                await _botClient.SendMessage(chatId, "✅ İşçi təyinatı ləğv edildi.");
+                await _botClient.SendMessage(chatId, "✅ Назначение сотрудника отменено.");
                 await SendAdminOrderActionsAsync(chatId, orderNumber);
             }
             return;
@@ -1032,11 +1032,11 @@ public class TelegramUpdateHandler
             {
                 var admin = await GetRequiredAdminStaffAsync(telegramUserId);
                 var assignment = await _assignmentService.GetOrderAssignmentAsync(orderNumber)
-                    ?? throw new InvalidOperationException("Sifariş əvvəlcə işçiyə təyin edilməlidir.");
+                    ?? throw new InvalidOperationException("Сначала назначьте сотрудника на заказ.");
 
                 await _shipmentService.CreateReadyShipmentAsync(
                     orderNumber, assignment.StaffId, admin.Id);
-                await _botClient.SendMessage(chatId, "✅ Hazır məhsullar üçün göndəriş yaradıldı.");
+                await _botClient.SendMessage(chatId, "✅ Создана отправка для готовых товаров.");
                 await SendAdminShipmentsAsync(chatId, orderNumber);
             }
             return;
@@ -1054,7 +1054,7 @@ public class TelegramUpdateHandler
                     "o" => ShipmentStatus.OutForDelivery,
                     "d" => ShipmentStatus.Delivered,
                     "c" => ShipmentStatus.Cancelled,
-                    _ => throw new InvalidOperationException("Naməlum göndəriş statusu.")
+                    _ => throw new InvalidOperationException("Неизвестный статус отправки.")
                 };
                 var admin = await GetRequiredAdminStaffAsync(telegramUserId);
                 var shipment = await _shipmentService.ChangeStatusAsync(shipmentId, admin.Id, status);
@@ -1076,7 +1076,7 @@ public class TelegramUpdateHandler
 
             await SendAdminOrderListAsync(
                 chatId,
-                "🆕 Yeni sifarişlər",
+                "🆕 Новые заказы",
                 orders);
 
             return;
@@ -1088,7 +1088,7 @@ public class TelegramUpdateHandler
 
             await SendAdminOrderListAsync(
                 chatId,
-                "📦 Aktiv sifarişlər",
+                "📦 Активные заказы",
                 orders);
 
             return;
@@ -1100,7 +1100,7 @@ public class TelegramUpdateHandler
 
             await SendAdminOrderListAsync(
                 chatId,
-                "📜 Sifariş tarixçəsi",
+                "📜 История заказов",
                 orders);
 
             return;
@@ -1119,7 +1119,7 @@ public class TelegramUpdateHandler
 
             await SendAdminOrderListAsync(
                 chatId,
-                "🚚 Xüsusi sifarişlər",
+                "🚚 Особые заказы",
                 specialOrders);
 
             return;
@@ -1175,7 +1175,7 @@ public class TelegramUpdateHandler
 
                 await _botClient.SendMessage(
                     chatId,
-                    "⛔ Məhsul passiv edildi.");
+                    "⛔ Товар деактивирован.");
 
                 await SendAdminProductDetailAsync(
                     chatId,
@@ -1196,7 +1196,7 @@ public class TelegramUpdateHandler
 
                 await _botClient.SendMessage(
                     chatId,
-                    "✅ Məhsul aktiv edildi.");
+                    "✅ Товар активирован.");
 
                 await SendAdminProductDetailAsync(
                     chatId,
@@ -1235,7 +1235,7 @@ public class TelegramUpdateHandler
 
                 await _botClient.SendMessage(
                     chatId,
-                    "Yeni qiyməti AZN ilə yazın.\nMəsələn: 2.50");
+                    "Введите новую цену в AZN.\nНапример: 2.50");
             }
 
             return;
@@ -1250,24 +1250,24 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     chatId,
-                    "Stok əməliyyatını seçin:",
+                    "Выберите операцию со складом:",
                     replyMarkup: new InlineKeyboardMarkup(
                         new[]
                         {
                     new[]
                     {
                         InlineKeyboardButton.WithCallbackData(
-                            "➕ Əlavə et",
+                            "➕ Добавить",
                             $"admin:stock-add:{productId}"),
 
                         InlineKeyboardButton.WithCallbackData(
-                            "➖ Stokdan çıx",
+                            "➖ Списать со склада",
                             $"admin:stock-remove:{productId}")
                     },
                     new[]
                     {
                         InlineKeyboardButton.WithCallbackData(
-                            "🔢 Dəqiq təyin et",
+                            "🔢 Установить точно",
                             $"admin:stock-set:{productId}")
                     }
                         }));
@@ -1315,8 +1315,8 @@ public class TelegramUpdateHandler
             await _botClient.SendMessage(
                 chatId,
                 action == AdminStockAction.Set
-                    ? "Yeni dəqiq stok sayını yazın:"
-                    : "Miqdarı yazın:");
+                    ? "Введите точное новое количество на складе:"
+                    : "Введите количество:");
 
             return;
         }
@@ -1326,16 +1326,16 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     chatId,
-                    "Mini App ünvanı konfiqurasiya edilməyib.");
+                    "Адрес Mini App не настроен.");
 
                 return;
             }
 
             await _botClient.SendMessage(
                 chatId,
-                "Yeni məhsulu kateqoriya və ölçü seçərək Mini App-dan əlavə edin.",
+                "Добавьте новый товар в Mini App, выбрав категорию и размер.",
                 replyMarkup: BuildMiniAppKeyboard(
-                    "📱 Mini App-da məhsul yarat"));
+                    "📱 Создать товар в Mini App"));
 
             return;
         }
@@ -1355,7 +1355,7 @@ public class TelegramUpdateHandler
 
                 await _botClient.SendMessage(
                     chatId,
-                    "Məhsulun yeni adını yazın:");
+                    "Введите новое название товара:");
             }
 
             return;
@@ -1379,7 +1379,7 @@ public class TelegramUpdateHandler
 
                 await _botClient.SendMessage(
                     chatId,
-                    "Məhsulun yeni açıqlamasını yazın:");
+                    "Введите новое описание товара:");
             }
 
             return;
@@ -1401,8 +1401,8 @@ public class TelegramUpdateHandler
 
                 await _botClient.SendMessage(
                     chatId,
-                    "Yeni şəkli göndərin.\n" +
-                    "Şəkli silmək üçün “Şəkli sil” yazın.");
+                    "Отправьте новое изображение.\n" +
+                    "Чтобы удалить изображение, отправьте «Удалить изображение».");
             }
 
             return;
@@ -1431,7 +1431,7 @@ public class TelegramUpdateHandler
                     SpecialOrderStatus.Completed,
 
                 _ => throw new InvalidOperationException(
-                    "Unknown special-order action.")
+                    "Неизвестное действие со специальным заказом.")
             };
 
             await _orderService.ChangeSpecialOrderStatusAsync(
@@ -1442,15 +1442,15 @@ public class TelegramUpdateHandler
             var customerMessage = newStatus switch
             {
                 SpecialOrderStatus.OrderedFromSupplier =>
-                    "📦 Çatışmayan məhsulunuz təchizatçıdan sifariş edildi.",
+                    "📦 Недостающий товар заказан у поставщика.",
 
                 SpecialOrderStatus.Arrived =>
-                    "✅ Sifarişlə gətirilən məhsulunuz gəldi.",
+                    "✅ Заказанный у поставщика товар поступил.",
 
                 SpecialOrderStatus.Completed =>
-                    "✅ Xüsusi məhsul sifarişi tamamlandı.",
+                    "✅ Специальный заказ товара завершён.",
 
-                _ => "Xüsusi sifariş statusu dəyişdi."
+                _ => "Статус специального заказа изменён."
             };
 
             await NotifyOrderStatusAsync(
@@ -1487,7 +1487,7 @@ public class TelegramUpdateHandler
                 {
             new[]
             {
-                new KeyboardButton("📱 Nömrəni paylaş")
+                new KeyboardButton("📱 Поделиться номером")
                 {
                     RequestContact = true
                 }
@@ -1500,7 +1500,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 chatId,
-                "Yeni telefon nömrənizi paylaşın və ya mətnlə yazın.",
+                "Поделитесь новым номером телефона или введите его текстом.",
                 replyMarkup: contactKeyboard);
 
             return;
@@ -1548,7 +1548,7 @@ public class TelegramUpdateHandler
                 await _miniAppMenuButtonService.ResetAsync(user.Id);
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "İcazəniz yoxdur.");
+                    "У вас нет доступа.");
                 return;
             }
 
@@ -1559,13 +1559,13 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "İşçi paneli hələ yayımlanmayıb.");
+                    "Панель сотрудника пока не опубликована.");
                 return;
             }
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "Tapşırıqlarınızı mesaj sətrinin yanındakı “📦 Tapşırıqlar” düyməsindən idarə edin.");
+                "Управляйте заданиями кнопкой «📦 Задания» рядом со строкой сообщения.");
             return;
         }
 
@@ -1611,7 +1611,7 @@ public class TelegramUpdateHandler
             await _customerService.GetByTelegramUserIdAsync(
                 telegramUserId)
             ?? throw new KeyNotFoundException(
-                "Customer was not found.");
+                "Клиент не найден.");
 
         var productSession = _sessionStore.GetOrCreate(telegramUserId);
         var query = new ProductCatalogQuery(
@@ -1628,7 +1628,7 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Seçilmiş filterlərə uyğun məhsul tapılmadı.",
+                "Товары по выбранным фильтрам не найдены.",
                 replyMarkup: BuildProductFilterKeyboard());
 
             return;
@@ -1637,21 +1637,21 @@ public class TelegramUpdateHandler
         var text = new StringBuilder();
 
         text.AppendLine(
-            $"🛍 Məhsullar — səhifə {result.PageNumber}/{result.TotalPages}");
+            $"🛍 Товары — страница {result.PageNumber}/{result.TotalPages}");
 
         if (productSession.ProductCategoryId.HasValue)
         {
             var selectedCategory = await _categoryService.GetByIdAsync(
                 productSession.ProductCategoryId.Value);
             if (selectedCategory is not null)
-                text.AppendLine($"Kateqoriya: {selectedCategory.Name}");
+                text.AppendLine($"Категория: {selectedCategory.Name}");
         }
 
         if (!string.IsNullOrWhiteSpace(productSession.ProductSubcategoryName))
-            text.AppendLine($"Ölçü: {productSession.ProductSubcategoryName}");
+            text.AppendLine($"Размер: {productSession.ProductSubcategoryName}");
 
         if (!string.IsNullOrWhiteSpace(productSession.ProductSearch))
-            text.AppendLine($"Axtarış: {productSession.ProductSearch}");
+            text.AppendLine($"Поиск: {productSession.ProductSearch}");
 
         text.AppendLine();
 
@@ -1671,17 +1671,17 @@ public class TelegramUpdateHandler
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "🏷 Kateqoriya",
+                "🏷 Категория",
                 "products:filter:category"),
             InlineKeyboardButton.WithCallbackData(
-                "📐 Ölçü",
+                "📐 Размер",
                 "products:filter:subcategory")
         ]);
 
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "🔎 Məhsul axtar",
+                "🔎 Найти товар",
                 "products:search")
         ]);
 
@@ -1692,7 +1692,7 @@ public class TelegramUpdateHandler
             rows.Add(
             [
                 InlineKeyboardButton.WithCallbackData(
-                    "🧹 Filterləri təmizlə",
+                    "🧹 Сбросить фильтры",
                     "products:clear")
             ]);
         }
@@ -1712,7 +1712,7 @@ public class TelegramUpdateHandler
         {
             navigationRow.Add(
                 InlineKeyboardButton.WithCallbackData(
-                    "⬅️ Əvvəlki",
+                    "⬅️ Назад",
                     $"products:page:{result.PageNumber - 1}"));
         }
 
@@ -1720,7 +1720,7 @@ public class TelegramUpdateHandler
         {
             navigationRow.Add(
                 InlineKeyboardButton.WithCallbackData(
-                    "Növbəti ➡️",
+                    "Далее ➡️",
                     $"products:page:{result.PageNumber + 1}"));
         }
 
@@ -1743,22 +1743,22 @@ public class TelegramUpdateHandler
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-            "5 göstər",
+            "Показывать 5",
             "products:size:5"),
 
         InlineKeyboardButton.WithCallbackData(
-            "10 göstər",
+            "Показывать 10",
             "products:size:10"),
 
         InlineKeyboardButton.WithCallbackData(
-            "20 göstər",
+            "Показывать 20",
             "products:size:20")
         ]);
 
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "🏠 Ana menyu",
+                "🏠 Главное меню",
                 "menu:main")
         ]);
 
@@ -1778,20 +1778,20 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "🛒 Səbətiniz boşdur.",
+                "🛒 Ваша корзина пуста.",
                 replyMarkup: new InlineKeyboardMarkup(
                     new[]
                     {
                         new[]
                         {
                             InlineKeyboardButton.WithCallbackData(
-                                "🛍 Məhsullara bax",
+                                "🛍 Посмотреть товары",
                                 "menu:products")
                         },
                         new[]
                         {
                             InlineKeyboardButton.WithCallbackData(
-                                "🏠 Ana menyu",
+                                "🏠 Главное меню",
                                 "menu:main")
                         }
                     }));
@@ -1801,7 +1801,7 @@ public class TelegramUpdateHandler
 
         var text = new StringBuilder();
 
-        text.AppendLine("🛒 Səbətiniz");
+        text.AppendLine("🛒 Ваша корзина");
         text.AppendLine();
 
         foreach (var item in cart.Items)
@@ -1818,7 +1818,7 @@ public class TelegramUpdateHandler
 
         text.AppendLine();
         text.AppendLine(
-            $"💰 Məhsulların cəmi: {cart.ProductsTotal:0.00} AZN");
+            $"💰 Стоимость товаров: {cart.ProductsTotal:0.00} AZN");
 
         var rows = new List<InlineKeyboardButton[]>();
 
@@ -1831,7 +1831,7 @@ public class TelegramUpdateHandler
             rows.Add(
             [
                 InlineKeyboardButton.WithCallbackData(
-                $"❌ Sil: {buttonName}",
+                $"❌ Удалить: {buttonName}",
                 $"cart:remove:{item.ProductId}")
             ]);
         }
@@ -1839,25 +1839,25 @@ public class TelegramUpdateHandler
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-            "🛍 Alışa davam et",
+            "🛍 Продолжить покупки",
             "cart:continue"),
 
         InlineKeyboardButton.WithCallbackData(
-            "🗑 Təmizlə",
+            "🗑 Очистить",
             "cart:clear")
         ]);
 
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-            "✅ Sifarişi tamamla",
+            "✅ Оформить заказ",
             "cart:checkout")
         ]);
 
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "🏠 Ana menyu",
+                "🏠 Главное меню",
                 "menu:main")
         ]);
 
@@ -1875,31 +1875,31 @@ public class TelegramUpdateHandler
             await _customerService.GetByTelegramUserIdAsync(
                 telegramUserId)
             ?? throw new KeyNotFoundException(
-                "Customer was not found.");
+                "Клиент не найден.");
 
-        var phone = customer.PhoneNumber ?? "Əlavə edilməyib";
-        var address = customer.DeliveryAddress ?? "Əlavə edilməyib";
+        var phone = customer.PhoneNumber ?? "Не указано";
+        var address = customer.DeliveryAddress ?? "Не указано";
 
         await _botClient.SendMessage(
     chatId,
-    $"📍 Məlumatlarım\n\n" +
+    $"📍 Мои данные\n\n" +
     $"Ad: {customer.FirstName} {customer.LastName}\n" +
-    $"Telefon: {phone}\n" +
-    $"Ünvan: {address}\n" +
-    $"Səhifə ölçüsü: {customer.ProductPageSize}",
+    $"Телефон: {phone}\n" +
+    $"Адрес: {address}\n" +
+    $"Размер страницы: {customer.ProductPageSize}",
     replyMarkup: new InlineKeyboardMarkup(
         new[]
         {
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
-                    "✏️ Telefon və ünvanı dəyiş",
+                    "✏️ Изменить телефон и адрес",
                     "profile:edit")
             },
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
-                    "🏠 Ana menyu",
+                    "🏠 Главное меню",
                     "menu:main")
             }
         }));
@@ -1911,10 +1911,10 @@ public class TelegramUpdateHandler
     {
         var product = await _productService.GetByIdAsync(productId)
             ?? throw new KeyNotFoundException(
-                "Product was not found.");
+                "Товар не найден.");
 
         if (!product.IsCatalogVisible)
-            throw new InvalidOperationException("Product is no longer available in the catalog.");
+            throw new InvalidOperationException("Товар больше недоступен в каталоге.");
 
         var text = BuildProductDetailText(product, quantity);
         var keyboard = BuildProductKeyboard(product, quantity);
@@ -1943,10 +1943,10 @@ public class TelegramUpdateHandler
     {
         var product = await _productService.GetByIdAsync(productId)
             ?? throw new KeyNotFoundException(
-                "Product was not found.");
+                "Товар не найден.");
 
         if (!product.IsCatalogVisible)
-            throw new InvalidOperationException("Product is no longer available in the catalog.");
+            throw new InvalidOperationException("Товар больше недоступен в каталоге.");
 
         var text = BuildProductDetailText(product, quantity);
         var keyboard = BuildProductKeyboard(product, quantity);
@@ -1983,12 +1983,12 @@ public class TelegramUpdateHandler
         text.AppendLine();
         text.AppendLine($"Kod: {product.Code}");
         if (!string.IsNullOrWhiteSpace(product.CategoryName))
-            text.AppendLine($"Kateqoriya: {product.CategoryName}");
+            text.AppendLine($"Категория: {product.CategoryName}");
         if (!string.IsNullOrWhiteSpace(product.SubcategoryName))
-            text.AppendLine($"Ölçü: {product.SubcategoryName}");
-        text.AppendLine($"Qiymət: {product.Price:0.00} AZN");
-        text.AppendLine($"Miqdar: {quantity}");
-        text.AppendLine($"Cəmi: {product.Price * quantity:0.00} AZN");
+            text.AppendLine($"Размер: {product.SubcategoryName}");
+        text.AppendLine($"Цена: {product.Price:0.00} AZN");
+        text.AppendLine($"Количество: {quantity}");
+        text.AppendLine($"Итого: {product.Price * quantity:0.00} AZN");
 
         text.AppendLine();
         text.AppendLine(description);
@@ -2021,21 +2021,21 @@ public class TelegramUpdateHandler
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                $"🛒 {quantity} ədəd səbətə əlavə et",
+                $"🛒 {quantity} шт. добавить в корзину",
                 $"cart:add:{product.Id}:{quantity}:p")
         ]);
 
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-            "⬅️ Məhsullara qayıt",
+            "⬅️ Вернуться к товарам",
             "products:back")
         ]);
 
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "🏠 Ana menyu",
+                "🏠 Главное меню",
                 "menu:main")
         ]);
 
@@ -2050,7 +2050,7 @@ public class TelegramUpdateHandler
             await _customerService.GetByTelegramUserIdAsync(
                 telegramUserId)
             ?? throw new KeyNotFoundException(
-                "Customer was not found.");
+                "Клиент не найден.");
 
         if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
         {
@@ -2066,7 +2066,7 @@ public class TelegramUpdateHandler
                 {
             new[]
             {
-                new KeyboardButton("📱 Nömrəni paylaş")
+                new KeyboardButton("📱 Поделиться номером")
                 {
                     RequestContact = true
                 }
@@ -2079,8 +2079,8 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 chatId,
-                "Sifariş üçün telefon nömrənizi paylaşın " +
-                "və ya +994501234567 formatında yazın.",
+                "Для заказа поделитесь номером телефона " +
+                "или введите его в формате +994501234567.",
                 replyMarkup: contactKeyboard);
 
             return;
@@ -2112,7 +2112,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Miqdarı 1–99 aralığında tam rəqəm kimi yazın.");
+                    "Введите целое количество от 1 до 99.");
                 return true;
             }
 
@@ -2130,7 +2130,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Axtarış üçün ən azı 2 simvol yazın.");
+                    "Введите для поиска не менее 2 символов.");
                 return true;
             }
 
@@ -2138,7 +2138,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Axtarış mətni 100 simvoldan uzun ola bilməz.");
+                    "Поисковый запрос не может быть длиннее 100 символов.");
                 return true;
             }
 
@@ -2176,7 +2176,7 @@ public class TelegramUpdateHandler
                 {
                     await _botClient.SendMessage(
                         message.Chat.Id,
-                        "Yalnız öz telefon nömrənizi paylaşa bilərsiniz.");
+                        "Можно поделиться только своим номером телефона.");
 
                     return true;
                 }
@@ -2193,8 +2193,8 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Telefon nömrəsini düzgün formatda yazın.\n" +
-                    "Məsələn: +994501234567");
+                    "Введите номер телефона в правильном формате.\n" +
+                    "Например: +994501234567");
 
                 return true;
             }
@@ -2205,7 +2205,7 @@ public class TelegramUpdateHandler
             {
                 var customer = await _customerService.GetByTelegramUserIdAsync(
                     telegramUserId)
-                    ?? throw new KeyNotFoundException("Customer was not found.");
+                    ?? throw new KeyNotFoundException("Клиент не найден.");
                 var addresses = await _customerAddressService.GetActiveAsync(
                     telegramUserId);
                 var contactAddress = addresses.FirstOrDefault();
@@ -2221,7 +2221,7 @@ public class TelegramUpdateHandler
                             contactAddress.Longitude));
                     await _botClient.SendMessage(
                         message.Chat.Id,
-                        "✅ Telefon nömrəsi saxlanıldı.",
+                        "✅ Номер телефона сохранён.",
                         replyMarkup: new ReplyKeyboardRemove());
                     await ShowAddressSelectionAsync(
                         telegramUserId,
@@ -2232,7 +2232,7 @@ public class TelegramUpdateHandler
                 session.CheckoutStep = CheckoutStep.AwaitingNewAddress;
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "📍 Çatdırılma ünvanını mətnlə yazın.",
+                    "📍 Введите адрес доставки текстом.",
                     replyMarkup: new ReplyKeyboardRemove());
                 return true;
             }
@@ -2241,7 +2241,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "📍 Çatdırılma ünvanını mətnlə yazın.",
+                "📍 Введите адрес доставки текстом.",
                 replyMarkup: new ReplyKeyboardRemove());
 
             return true;
@@ -2253,7 +2253,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Ünvanı mətn şəklində yazın.");
+                    "Введите адрес текстом.");
                 return true;
             }
 
@@ -2261,31 +2261,31 @@ public class TelegramUpdateHandler
             session.CheckoutStep = CheckoutStep.AwaitingNewLocation;
             await SendLocationRequestAsync(
                 message.Chat.Id,
-                "Yeni ünvan üçün lokasiyanı paylaşın və ya lokasiyasız davam edin.");
+                "Отправьте геолокацию для нового адреса или продолжите без неё.");
             return true;
         }
 
         if (session.CheckoutStep == CheckoutStep.AwaitingNewLocation)
         {
             var skipLocation = message.Text?.Equals(
-                "Lokasiyasız davam et",
+                "Продолжить без геолокации",
                 StringComparison.OrdinalIgnoreCase) == true;
 
             if (message.Location is null && !skipLocation)
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Lokasiyanı paylaşın və ya “Lokasiyasız davam et” seçin.");
+                    "Отправьте геолокацию или выберите «Продолжить без геолокации».");
                 return true;
             }
 
             var customer = await _customerService.GetByTelegramUserIdAsync(
                 telegramUserId)
-                ?? throw new KeyNotFoundException("Customer was not found.");
+                ?? throw new KeyNotFoundException("Клиент не найден.");
             var phoneNumber = session.PhoneNumber ?? customer.PhoneNumber
-                ?? throw new InvalidOperationException("Phone number is required.");
+                ?? throw new InvalidOperationException("Номер телефона обязателен.");
             var addressLine = session.DeliveryAddress
-                ?? throw new InvalidOperationException("Delivery address is required.");
+                ?? throw new InvalidOperationException("Адрес доставки обязателен.");
 
             var address = await _customerAddressService.CreateAsync(
                 telegramUserId,
@@ -2308,7 +2308,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "✅ Yeni ünvan saxlanıldı.",
+                "✅ Новый адрес сохранён.",
                 replyMarkup: new ReplyKeyboardRemove());
             await ShowDeliveryCompanySelectionAsync(
                 telegramUserId,
@@ -2322,7 +2322,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Ünvanı mətn şəklində yazın.");
+                    "Введите адрес текстом.");
 
                 return true;
             }
@@ -2333,7 +2333,7 @@ public class TelegramUpdateHandler
 
             await SendLocationRequestAsync(
                 message.Chat.Id,
-                "İstəsəniz dəqiq lokasiyanı paylaşın.");
+                "При желании отправьте точную геолокацию.");
 
             return true;
         }
@@ -2342,15 +2342,15 @@ public class TelegramUpdateHandler
         {
             var skipLocation =
                 message.Text?.Equals(
-                    "Lokasiyasız davam et",
+                    "Продолжить без геолокации",
                     StringComparison.OrdinalIgnoreCase) == true;
 
             if (message.Location is null && !skipLocation)
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Lokasiyanı paylaşın və ya " +
-                    "“Lokasiyasız davam et” seçin.");
+                    "Отправьте геолокацию или " +
+                    "“Продолжить без геолокации».");
 
                 return true;
             }
@@ -2370,7 +2370,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "✅ Əlaqə və ünvan məlumatları saxlanıldı.",
+                "✅ Контактные данные и адрес сохранены.",
                 replyMarkup: new ReplyKeyboardRemove());
 
             if (continueToCheckout)
@@ -2404,7 +2404,7 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Saxlanmış aktiv ünvanınız yoxdur. Yeni ünvan əlavə edin.");
+                "У вас нет сохранённого активного адреса. Добавьте новый адрес.");
             await PromptForNewAddressAsync(telegramUserId, chatId);
             return;
         }
@@ -2421,19 +2421,19 @@ public class TelegramUpdateHandler
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "➕ Yeni ünvan əlavə et",
+                "➕ Добавить новый адрес",
                 "checkout:new-address")
         ]);
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "❌ İmtina et",
+                "❌ Отказаться",
                 "checkout:cancel")
         ]);
 
         await _botClient.SendMessage(
             chatId,
-            "Sifariş üçün çatdırılma ünvanını seçin:",
+            "Выберите адрес доставки для заказа:",
             replyMarkup: new InlineKeyboardMarkup(rows));
     }
 
@@ -2443,25 +2443,25 @@ public class TelegramUpdateHandler
         [
             [
                 InlineKeyboardButton.WithCallbackData(
-                    "🏷 Kateqoriya",
+                    "🏷 Категория",
                     "products:filter:category"),
                 InlineKeyboardButton.WithCallbackData(
-                    "📐 Ölçü",
+                    "📐 Размер",
                     "products:filter:subcategory")
             ],
             [
                 InlineKeyboardButton.WithCallbackData(
-                    "🔎 Məhsul axtar",
+                    "🔎 Найти товар",
                     "products:search")
             ],
             [
                 InlineKeyboardButton.WithCallbackData(
-                    "🧹 Filterləri təmizlə",
+                    "🧹 Сбросить фильтры",
                     "products:clear")
             ],
             [
                 InlineKeyboardButton.WithCallbackData(
-                    "🏠 Ana menyu",
+                    "🏠 Главное меню",
                     "menu:main")
             ]
         ]);
@@ -2482,20 +2482,20 @@ public class TelegramUpdateHandler
         rows.Insert(0,
         [
             InlineKeyboardButton.WithCallbackData(
-                "Hamısı",
+                "Все",
                 "products:category:all")
         ]);
 
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "⬅️ Məhsullara qayıt",
+                "⬅️ Вернуться к товарам",
                 "products:back")
         ]);
 
         await _botClient.SendMessage(
             chatId,
-            "Kateqoriya seçin:",
+            "Выберите категорию:",
             replyMarkup: new InlineKeyboardMarkup(rows));
     }
 
@@ -2520,20 +2520,20 @@ public class TelegramUpdateHandler
         rows.Insert(0,
         [
             InlineKeyboardButton.WithCallbackData(
-                "Hamısı",
+                "Все",
                 "products:subcategory:all")
         ]);
 
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "⬅️ Məhsullara qayıt",
+                "⬅️ Вернуться к товарам",
                 "products:back")
         ]);
 
         await _botClient.SendMessage(
             chatId,
-            "Ölçü seçin. Seçim bütün kateqoriyalara tətbiq olunacaq:",
+            "Выберите размер. Фильтр применится ко всем категориям:",
             replyMarkup: new InlineKeyboardMarkup(rows));
     }
 
@@ -2549,8 +2549,8 @@ public class TelegramUpdateHandler
 
         await _botClient.SendMessage(
             chatId,
-            "📍 Yeni çatdırılma ünvanını mətnlə yazın.\n" +
-            "Ləğv etmək üçün /cancel yazın.",
+            "📍 Введите новый адрес доставки текстом.\n" +
+            "Для отмены отправьте /cancel.",
             replyMarkup: new ReplyKeyboardRemove());
     }
 
@@ -2574,14 +2574,14 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Hazırda aktiv çatdırılma şirkəti yoxdur. Sonra yenidən cəhd edin.",
+                "Сейчас нет активных служб доставки. Повторите попытку позже.",
                 replyMarkup: new InlineKeyboardMarkup(
                 [
                     [InlineKeyboardButton.WithCallbackData(
-                        "⬅️ Ünvan seçiminə qayıt",
+                        "⬅️ Вернуться к выбору адреса",
                         "checkout:back-address")],
                     [InlineKeyboardButton.WithCallbackData(
-                        "❌ İmtina et",
+                        "❌ Отказаться",
                         "checkout:cancel")]
                 ]));
             return;
@@ -2598,19 +2598,19 @@ public class TelegramUpdateHandler
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "⬅️ Ünvan seçiminə qayıt",
+                "⬅️ Вернуться к выбору адреса",
                 "checkout:back-address")
         ]);
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "❌ İmtina et",
+                "❌ Отказаться",
                 "checkout:cancel")
         ]);
 
         await _botClient.SendMessage(
             chatId,
-            "Çatdırılma şirkətini seçin:",
+            "Выберите службу доставки:",
             replyMarkup: new InlineKeyboardMarkup(rows));
     }
 
@@ -2622,7 +2622,7 @@ public class TelegramUpdateHandler
             await _customerService.GetByTelegramUserIdAsync(
                 telegramUserId)
             ?? throw new KeyNotFoundException(
-                "Customer was not found.");
+                "Клиент не найден.");
 
         var cart = await _cartService.GetAsync(telegramUserId);
         if (!_sessionStore.TryGet(telegramUserId, out var session) ||
@@ -2640,7 +2640,7 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Seçilmiş ünvan artıq aktiv deyil.");
+                "Выбранный адрес больше не активен.");
             await ShowAddressSelectionAsync(telegramUserId, chatId);
             return;
         }
@@ -2651,7 +2651,7 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Seçilmiş çatdırılma şirkəti artıq aktiv deyil.");
+                "Выбранная служба доставки больше не активна.");
             await ShowDeliveryCompanySelectionAsync(telegramUserId, chatId);
             return;
         }
@@ -2660,29 +2660,29 @@ public class TelegramUpdateHandler
 
         await _botClient.SendMessage(
             chatId,
-            $"Sifarişi təsdiqləyirsiniz?\n\n" +
-            $"Məbləğ: {cart.ProductsTotal:0.00} AZN\n" +
-            $"Telefon: {customer.PhoneNumber}\n" +
-            $"Ünvan: {address.AddressLine}\n" +
-            $"Çatdırılma şirkəti: {company.Name}\n\n" +
-            "Çatdırılma haqqı adminlə razılaşdırılacaq.",
+            $"Подтвердить заказ?\n\n" +
+            $"Сумма: {cart.ProductsTotal:0.00} AZN\n" +
+            $"Телефон: {customer.PhoneNumber}\n" +
+            $"Адрес: {address.AddressLine}\n" +
+            $"Служба доставки: {company.Name}\n\n" +
+            "Стоимость доставки будет согласована с администратором.",
             replyMarkup: new InlineKeyboardMarkup(
                 new[]
                 {
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData(
-                        "✅ Təsdiqlə",
+                        "✅ Подтвердить",
                         "order:confirm-checkout"),
 
                     InlineKeyboardButton.WithCallbackData(
-                        "⬅️ Dəyiş",
+                        "⬅️ Изменить",
                         "checkout:back-address")
                 },
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData(
-                        "❌ İmtina et",
+                        "❌ Отказаться",
                         "checkout:cancel")
                 }
                 }));
@@ -2692,8 +2692,8 @@ public class TelegramUpdateHandler
     {
         var locationKeyboard = new ReplyKeyboardMarkup(
         [
-            [new KeyboardButton("📍 Lokasiyanı paylaş") { RequestLocation = true }],
-            [new KeyboardButton("Lokasiyasız davam et")]
+            [new KeyboardButton("📍 Отправить геолокацию") { RequestLocation = true }],
+            [new KeyboardButton("Продолжить без геолокации")]
         ])
         {
             ResizeKeyboard = true,
@@ -2717,7 +2717,7 @@ public class TelegramUpdateHandler
     {
         var customer = await _customerService.GetByIdAsync(order.CustomerId);
         var customerFullName = customer is null
-            ? "Naməlum müştəri"
+            ? "Неизвестный клиент"
             : string.Join(
                 " ",
                 new[] { customer.FirstName, customer.LastName }
@@ -2725,11 +2725,11 @@ public class TelegramUpdateHandler
 
         var text = new StringBuilder();
 
-        text.AppendLine($"🆕 Yeni sifariş #{order.OrderNumber}");
-        text.AppendLine($"👤 Müştəri: {customerFullName}");
+        text.AppendLine($"🆕 Новый заказ #{order.OrderNumber}");
+        text.AppendLine($"👤 Клиент: {customerFullName}");
         text.AppendLine();
-        text.AppendLine($"Telefon: {order.PhoneNumber}");
-        text.AppendLine($"Ünvan: {order.DeliveryAddress}");
+        text.AppendLine($"Телефон: {order.PhoneNumber}");
+        text.AppendLine($"Адрес: {order.DeliveryAddress}");
         text.AppendLine();
 
         foreach (var item in order.Items)
@@ -2745,14 +2745,14 @@ public class TelegramUpdateHandler
             if (item.SpecialOrderQuantity > 0)
             {
                 text.AppendLine(
-                    $"  Stokdan: {item.FromStockQuantity}, " +
-                    $"sifarişlə: {item.SpecialOrderQuantity}");
+                    $"  Со склада: {item.FromStockQuantity}, " +
+                    $"под заказ: {item.SpecialOrderQuantity}");
             }
         }
 
         text.AppendLine();
         text.AppendLine(
-            $"Məhsulların cəmi: {order.ProductsTotal:0.00} AZN");
+            $"Стоимость товаров: {order.ProductsTotal:0.00} AZN");
 
         await _botClient.SendMessage(
             _telegramOptions.AdminUserId,
@@ -2763,11 +2763,11 @@ public class TelegramUpdateHandler
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData(
-                        "✅ Təsdiqlə",
+                        "✅ Подтвердить",
                         $"admin:confirm:{order.OrderNumber}"),
 
                     InlineKeyboardButton.WithCallbackData(
-                        "❌ Ləğv et",
+                        "❌ Отменить",
                         $"admin:cancel:{order.OrderNumber}")
                 }
                 }));
@@ -2779,16 +2779,16 @@ public class TelegramUpdateHandler
         var order =
             await _orderService.GetByOrderNumberAsync(orderNumber)
             ?? throw new KeyNotFoundException(
-                "Order was not found.");
+                "Заказ не найден.");
 
         var customer =
             await _customerService.GetByIdAsync(order.CustomerId)
             ?? throw new KeyNotFoundException(
-                "Customer was not found.");
+                "Клиент не найден.");
 
         await _botClient.SendMessage(
             customer.TelegramUserId,
-            $"{statusMessage}\n\nSifariş: #{orderNumber}");
+            $"{statusMessage}\n\nЗаказ: №{orderNumber}");
     }
 
     private async Task SendAdminOrderActionsAsync(
@@ -2798,12 +2798,12 @@ public class TelegramUpdateHandler
         var order =
             await _orderService.GetByOrderNumberAsync(orderNumber)
             ?? throw new KeyNotFoundException(
-                "Order was not found.");
+                "Заказ не найден.");
 
         var customer =
             await _customerService.GetByIdAsync(order.CustomerId)
             ?? throw new KeyNotFoundException(
-                "Customer was not found.");
+                "Клиент не найден.");
 
         var customerOrders =
             await _orderService.GetCustomerOrdersAsync(
@@ -2822,11 +2822,11 @@ public class TelegramUpdateHandler
         var hasActiveShipment = shipments.Any(shipment =>
             shipment.Status is not ShipmentStatus.Delivered and not ShipmentStatus.Cancelled);
 
-        text.AppendLine($"📦 Sifariş #{order.OrderNumber}");
+        text.AppendLine($"📦 Заказ №{order.OrderNumber}");
         text.AppendLine(
-            $"Status: {GetOrderStatusText(order.Status)}");
+            $"Статус: {GetOrderStatusText(order.Status)}");
         text.AppendLine(
-            $"Çatdırılma: {GetDeliveryModeText(order.DeliveryMode)}");
+            $"Доставка: {GetDeliveryModeText(order.DeliveryMode)}");
         text.AppendLine();
 
         var fullName = string.Join(
@@ -2834,40 +2834,40 @@ public class TelegramUpdateHandler
             new[] { customer.FirstName, customer.LastName }
                 .Where(value => !string.IsNullOrWhiteSpace(value)));
 
-        text.AppendLine($"👤 Müştəri: {fullName}");
+        text.AppendLine($"👤 Клиент: {fullName}");
 
         if (!string.IsNullOrWhiteSpace(customer.Username))
             text.AppendLine($"Telegram: @{customer.Username}");
 
-        text.AppendLine($"Telefon: {order.PhoneNumber}");
-        text.AppendLine($"Ünvan: {order.DeliveryAddress}");
+        text.AppendLine($"Телефон: {order.PhoneNumber}");
+        text.AppendLine($"Адрес: {order.DeliveryAddress}");
         text.AppendLine(
-            $"Digər sifarişlər: {allOtherOrders.Count}");
+            $"Другие заказы: {allOtherOrders.Count}");
         text.AppendLine(activeAssignment is null
-            ? "İşçi: təyin edilməyib"
-            : $"İşçi: {activeAssignment.StaffName}");
+            ? "Сотрудник: не назначен"
+            : $"Сотрудник: {activeAssignment.StaffName}");
         text.AppendLine();
 
         foreach (var item in order.Items)
         {
             text.AppendLine(
-                $"• {item.ProductName} — {item.TotalQuantity} ədəd");
+                $"• {item.ProductName} — {item.TotalQuantity} шт.");
 
             text.AppendLine(
-                $"  Hazır: {item.ReadyQuantity} | " +
-                $"Çatdırılıb: {item.DeliveredQuantity} | " +
-                $"Qalıb: {item.RemainingQuantity}");
+                $"  Готово: {item.ReadyQuantity} | " +
+                $"Доставлено: {item.DeliveredQuantity} | " +
+                $"Осталось: {item.RemainingQuantity}");
 
             if (item.SpecialOrderQuantity > 0)
             {
                 text.AppendLine(
-                    $"  Stokdan: {item.FromStockQuantity}");
+                    $"  Со склада: {item.FromStockQuantity}");
 
                 text.AppendLine(
-                    $"  Sifarişlə: {item.SpecialOrderQuantity}");
+                    $"  Под заказ: {item.SpecialOrderQuantity}");
 
                 text.AppendLine(
-                    $"  Xüsusi status: " +
+                    $"  Специальный статус: " +
                     $"{GetSpecialOrderStatusText(item.SpecialOrderStatus)}");
             }
         }
@@ -2882,7 +2882,7 @@ public class TelegramUpdateHandler
                 rows.Add(
                 [
                     InlineKeyboardButton.WithCallbackData(
-                        "👷 İşçi təyin et / dəyiş",
+                        "👷 Назначить / изменить сотрудника",
                         $"admin:aw:{orderNumber}")
                 ]);
                 if (activeAssignment is not null)
@@ -2890,7 +2890,7 @@ public class TelegramUpdateHandler
                     rows.Add(
                     [
                         InlineKeyboardButton.WithCallbackData(
-                            "🚫 İşçi təyinatını ləğv et",
+                            "🚫 Отменить назначение сотрудника",
                             $"admin:unassign:{orderNumber}")
                     ]);
                 }
@@ -2900,7 +2900,7 @@ public class TelegramUpdateHandler
                 rows.Add(
                 [
                     InlineKeyboardButton.WithCallbackData(
-                        "📦 Göndəriş yarat",
+                        "📦 Создать отправку",
                         $"admin:ship:new:{orderNumber}")
                 ]);
             }
@@ -2909,7 +2909,7 @@ public class TelegramUpdateHandler
                 rows.Add(
                 [
                     InlineKeyboardButton.WithCallbackData(
-                        "🚚 Göndərişlər",
+                        "🚚 Отправки",
                         $"admin:ships:{orderNumber}")
                 ]);
             }
@@ -2922,10 +2922,10 @@ public class TelegramUpdateHandler
             rows.Add(
             [
                 InlineKeyboardButton.WithCallbackData(
-                    "⏳ Hamısını birlikdə",
+                    "⏳ Доставить всё вместе",
                     $"admin:delivery-mode:all:{orderNumber}"),
                 InlineKeyboardButton.WithCallbackData(
-                    "🚚 Hissə-hissə",
+                    "🚚 Частями",
                     $"admin:delivery-mode:partial:{orderNumber}")
             ]);
         }
@@ -2937,17 +2937,17 @@ public class TelegramUpdateHandler
             {
                 SpecialOrderStatus.Pending =>
                     InlineKeyboardButton.WithCallbackData(
-                        $"📤 Sifariş et: {item.ProductName}",
+                        $"📤 Заказать: {item.ProductName}",
                         $"admin:sp:ordered:{orderNumber}:{item.Id}"),
 
                 SpecialOrderStatus.OrderedFromSupplier =>
                     InlineKeyboardButton.WithCallbackData(
-                        $"📥 Məhsul gəldi: {item.ProductName}",
+                        $"📥 Товар поступил: {item.ProductName}",
                         $"admin:sp:arrived:{orderNumber}:{item.Id}"),
 
                 SpecialOrderStatus.Arrived =>
                     InlineKeyboardButton.WithCallbackData(
-                        $"✅ Xüsusi sifarişi tamamla: {item.ProductName}",
+                        $"✅ Завершить специальный заказ: {item.ProductName}",
                         $"admin:sp:completed:{orderNumber}:{item.Id}"),
 
                 _ => null
@@ -2965,11 +2965,11 @@ public class TelegramUpdateHandler
                     rows.Add(
                     [
                         InlineKeyboardButton.WithCallbackData(
-                        "📦 Hazırlanır",
+                        "📦 Готовится",
                         $"admin:preparing:{orderNumber}"),
 
                     InlineKeyboardButton.WithCallbackData(
-                            "❌ Ləğv et",
+                            "❌ Отменить",
                             $"admin:cancel:{orderNumber}")
                     ]);
                     break;
@@ -2980,7 +2980,7 @@ public class TelegramUpdateHandler
                         rows.Add(
                         [
                             InlineKeyboardButton.WithCallbackData(
-                                "❌ Ləğv et",
+                                "❌ Отменить",
                                 $"admin:cancel:{orderNumber}")
                         ]);
                     }
@@ -2997,8 +2997,8 @@ public class TelegramUpdateHandler
             order.Status is not OrderStatus.Cancelled)
         {
             var label = order.ReadyQuantity == order.RemainingQuantity
-                ? "🚚 Hamısını çatdır"
-                : $"🚚 Hazır olan {order.ReadyQuantity} ədədi çatdır";
+                ? "🚚 Доставить всё"
+                : $"🚚 Доставить готовые: {order.ReadyQuantity} шт.";
 
             rows.Add(
             [
@@ -3015,7 +3015,7 @@ public class TelegramUpdateHandler
             rows.Add(
             [
                 InlineKeyboardButton.WithCallbackData(
-                    "❌ Qalan hissəni ləğv et",
+                    "❌ Отменить остаток",
                     $"admin:cancel-remaining:{orderNumber}")
             ]);
         }
@@ -3025,7 +3025,7 @@ public class TelegramUpdateHandler
             rows.Add(
             [
                 InlineKeyboardButton.WithCallbackData(
-                    "📜 Müştərinin digər sifarişləri",
+                    "📜 Другие заказы клиента",
                     $"admin:customer-orders:{orderNumber}")
             ]);
         }
@@ -3033,7 +3033,7 @@ public class TelegramUpdateHandler
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-            "⬅️ Admin menyusu",
+            "⬅️ Меню администратора",
             "admin:menu")
         ]);
 
@@ -3055,10 +3055,10 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "📦 Hələ sifarişiniz yoxdur.",
+                "📦 У вас пока нет заказов.",
                 replyMarkup: new InlineKeyboardMarkup(
                     InlineKeyboardButton.WithCallbackData(
-                        "🏠 Ana menyu",
+                        "🏠 Главное меню",
                         "menu:main")));
 
             return;
@@ -3066,7 +3066,7 @@ public class TelegramUpdateHandler
 
         var text = new StringBuilder();
 
-        text.AppendLine("📦 Son sifarişləriniz");
+        text.AppendLine("📦 Ваши последние заказы");
         text.AppendLine();
 
         foreach (var order in orders)
@@ -3091,7 +3091,7 @@ public class TelegramUpdateHandler
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
-                    "🏠 Ana menyu",
+                    "🏠 Главное меню",
                     "menu:main")
             });
 
@@ -3109,28 +3109,28 @@ public class TelegramUpdateHandler
         var order =
             await _orderService.GetByOrderNumberAsync(orderNumber)
             ?? throw new KeyNotFoundException(
-                "Order was not found.");
+                "Заказ не найден.");
 
         var customer =
             await _customerService.GetByTelegramUserIdAsync(
                 telegramUserId)
             ?? throw new KeyNotFoundException(
-                "Customer was not found.");
+                "Клиент не найден.");
 
         if (order.CustomerId != customer.Id)
         {
             await _botClient.SendMessage(
                 chatId,
-                "Bu sifariş sizə aid deyil.");
+                "Этот заказ вам не принадлежит.");
 
             return;
         }
 
         var text = new StringBuilder();
 
-        text.AppendLine($"📦 Sifariş #{order.OrderNumber}");
+        text.AppendLine($"📦 Заказ №{order.OrderNumber}");
         text.AppendLine(
-            $"Status: {GetOrderStatusText(order.Status)}");
+            $"Статус: {GetOrderStatusText(order.Status)}");
         text.AppendLine();
 
         foreach (var item in order.Items)
@@ -3146,22 +3146,22 @@ public class TelegramUpdateHandler
             if (item.SpecialOrderQuantity > 0)
             {
                 text.AppendLine(
-                    $"  Çatdırılıb: {item.DeliveredQuantity}, " +
-                    $"qalıb: {item.RemainingQuantity}");
+                    $"  Доставлено: {item.DeliveredQuantity}, " +
+                    $"осталось: {item.RemainingQuantity}");
             }
         }
 
         text.AppendLine();
         text.AppendLine(
-            $"Məhsullar: {order.ProductsTotal:0.00} AZN");
+            $"Товары: {order.ProductsTotal:0.00} AZN");
 
         text.AppendLine(
             order.DeliveryFee.HasValue
-                ? $"Çatdırılma: {order.DeliveryFee:0.00} AZN"
-                : "Çatdırılma: adminlə razılaşdırılacaq");
+                ? $"Доставка: {order.DeliveryFee:0.00} AZN"
+                : "Доставка: будет согласована с администратором");
 
         text.AppendLine(
-            $"Ümumi: {order.TotalAmount:0.00} AZN");
+            $"Итого: {order.TotalAmount:0.00} AZN");
 
         await _botClient.SendMessage(
             chatId,
@@ -3172,13 +3172,13 @@ public class TelegramUpdateHandler
                     new[]
                     {
                         InlineKeyboardButton.WithCallbackData(
-                            "⬅️ Sifarişlərim",
+                            "⬅️ Мои заказы",
                             "menu:orders")
                     },
                     new[]
                     {
                         InlineKeyboardButton.WithCallbackData(
-                            "🏠 Ana menyu",
+                            "🏠 Главное меню",
                             "menu:main")
                     }
                 }));
@@ -3190,22 +3190,22 @@ public class TelegramUpdateHandler
         return status switch
         {
             OrderStatus.PendingAdminApproval =>
-                "Admin təsdiqi gözlənilir",
+                "Ожидает подтверждения администратора",
 
             OrderStatus.Confirmed =>
-                "Təsdiqləndi",
+                "Подтверждён",
 
             OrderStatus.Preparing =>
-                "Hazırlanır",
+                "Готовится",
 
             OrderStatus.Delivering =>
-                "Çatdırılır",
+                "Доставляется",
 
             OrderStatus.Completed =>
-                "Tamamlandı",
+                "Завершён",
 
             OrderStatus.Cancelled =>
-                "Ləğv edildi",
+                "Отменён",
 
             _ => status.ToString()
         };
@@ -3215,9 +3215,9 @@ public class TelegramUpdateHandler
     {
         return deliveryMode switch
         {
-            DeliveryMode.AllTogether => "Hamısı birlikdə",
-            DeliveryMode.PartialAllowed => "Hissə-hissə",
-            _ => "Admin qərarı gözlənilir"
+            DeliveryMode.AllTogether => "Всё вместе",
+            DeliveryMode.PartialAllowed => "Частями",
+            _ => "Ожидает решения администратора"
         };
     }
     private async Task SendCustomerMainMenuAsync(long chatId)
@@ -3228,30 +3228,30 @@ public class TelegramUpdateHandler
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
-                    "🛍 Məhsullar",
+                    "🛍 Товары",
                     "menu:products"),
 
                 InlineKeyboardButton.WithCallbackData(
-                    "🛒 Səbətim",
+                    "🛒 Корзина",
                     "menu:cart")
             },
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
-                    "📦 Sifarişlərim",
+                    "📦 Мои заказы",
                     "menu:orders"),
 
                 InlineKeyboardButton.WithCallbackData(
-                    "📍 Məlumatlarım",
+                    "📍 Мои данные",
                     "menu:profile")
             }
             });
 
         await _botClient.SendMessage(
             chatId,
-            "StockMate Bot-a xoş gəlmisiniz!\n\n" +
-            "Məhsullara baxa, səbət yarada və sifariş verə bilərsiniz.\n" +
-            "Mini App üçün mesaj sətrinin yanındakı “🛍 Mağaza” düyməsindən istifadə edin.",
+            "Добро пожаловать в StockMate Bot!\n\n" +
+            "Вы можете выбирать товары, собирать корзину и оформлять заказы.\n" +
+            "Для Mini App используйте кнопку «🛍 Магазин» рядом со строкой сообщения.",
             replyMarkup: keyboard);
     }
     private async Task SendAdminMainMenuAsync(long chatId)
@@ -3262,57 +3262,57 @@ public class TelegramUpdateHandler
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
-                    "🆕 Yeni sifarişlər",
+                    "🆕 Новые заказы",
                     "admin:orders:new"),
 
                 InlineKeyboardButton.WithCallbackData(
-                    "📦 Aktiv sifarişlər",
+                    "📦 Активные заказы",
                     "admin:orders:active")
             },
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
-                    "🚚 Xüsusi sifarişlər",
+                    "🚚 Особые заказы",
                     "admin:orders:special"),
 
                 InlineKeyboardButton.WithCallbackData(
-                    "📜 Tarixçə",
+                    "📜 История",
                     "admin:orders:history")
             },
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
-                    "🛍 Məhsullar",
+                    "🛍 Товары",
                     "admin:products"),
 
                 InlineKeyboardButton.WithCallbackData(
-                    "📊 Stok",
+                    "📊 Склад",
                     "admin:stock")
             },
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
-                    "👷 İşçilər",
+                    "👷 Сотрудники",
                     "admin:staff")
             },
             new[]
             {
                 InlineKeyboardButton.WithCallbackData(
-                    "🔗 Müştəri dəvət linki",
+                    "🔗 Ссылка-приглашение клиента",
                     "admin:invite:create")
             }
             });
 
         await _botClient.SendMessage(
             chatId,
-            "👨‍💼 StockMate Admin Panel",
+            "👨‍💼 Панель администратора StockMate",
             replyMarkup: keyboard);
 
         if (!string.IsNullOrWhiteSpace(_telegramOptions.MiniAppUrl))
         {
             await _botClient.SendMessage(
                 chatId,
-                "Mini App-ı mesaj sətrinin yanındakı “📱 Panel” düyməsindən aça bilərsiniz.");
+                "Mini App можно открыть кнопкой «📱 Панель» рядом со строкой сообщения.");
         }
     }
 
@@ -3330,20 +3330,20 @@ public class TelegramUpdateHandler
 
         if (string.IsNullOrWhiteSpace(bot.Username))
             throw new InvalidOperationException(
-                "Telegram bot username is not available.");
+                "Имя пользователя Telegram-бота недоступно.");
 
         var token = await _telegramInviteService.CreateAsync();
         var url = $"https://t.me/{bot.Username}?start={token}";
 
         await _botClient.SendMessage(
             chatId,
-            "🔗 Yeni birdəfəlik müştəri dəvət linki:\n\n" +
+            "🔗 Новая одноразовая ссылка-приглашение клиента:\n\n" +
             url +
-            "\n\nLink ilk müştəri START düyməsinə basdıqdan sonra " +
-            "istifadə edilmiş sayılacaq.",
+            "\n\nСсылка будет считаться использованной после того, как " +
+            "первый клиент нажмёт кнопку START.",
             replyMarkup: new InlineKeyboardMarkup(
                 InlineKeyboardButton.WithCallbackData(
-                    "🔄 Yeni link yarat",
+                    "🔄 Создать новую ссылку",
                     "admin:invite:create")));
     }
 
@@ -3374,8 +3374,8 @@ public class TelegramUpdateHandler
     {
         return _botClient.SendMessage(
             chatId,
-            "Bu bot yalnız dəvət linki ilə istifadə olunur. " +
-            "Zəhmət olmasa sizə göndərilmiş StockMate linkindən daxil olun.");
+            "Этот бот доступен только по ссылке-приглашению. " +
+            "Пожалуйста, перейдите по полученной ссылке StockMate.");
     }
 
     private static string? ExtractStartToken(string? text)
@@ -3405,10 +3405,10 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                $"{title}\n\nSifariş yoxdur.",
+                $"{title}\n\nЗаказов нет.",
                 replyMarkup: new InlineKeyboardMarkup(
                     InlineKeyboardButton.WithCallbackData(
-                        "⬅️ Admin menyusu",
+                        "⬅️ Меню администратора",
                         "admin:menu")));
 
             return;
@@ -3440,7 +3440,7 @@ public class TelegramUpdateHandler
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-            "⬅️ Admin menyusu",
+            "⬅️ Меню администратора",
             "admin:menu")
         ]);
 
@@ -3462,10 +3462,10 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Məhsul yoxdur.",
+                "Товаров нет.",
                 replyMarkup: new InlineKeyboardMarkup(
                     InlineKeyboardButton.WithCallbackData(
-                        "📱 Mini App-da məhsul yarat",
+                        "📱 Создать товар в Mini App",
                         "admin:product:add")));
 
             return;
@@ -3474,14 +3474,14 @@ public class TelegramUpdateHandler
         var text = new StringBuilder();
 
         text.AppendLine(
-            $"🛍 Məhsullar — {result.PageNumber}/{result.TotalPages}");
+            $"🛍 Товары — {result.PageNumber}/{result.TotalPages}");
 
         text.AppendLine();
 
         for (var index = 0; index < result.Items.Count; index++)
         {
             var product = result.Items[index];
-            var status = product.IsActive ? "Aktiv" : "Passiv";
+            var status = product.IsActive ? "Активный" : "Неактивный";
 
             text.AppendLine(
                 $"{index + 1}. {product.Name}");
@@ -3489,7 +3489,7 @@ public class TelegramUpdateHandler
             text.AppendLine(
                 $"   {product.Code} | " +
                 $"{product.Price:0.00} AZN | " +
-                $"Stok: {product.StockQuantity} | {status}");
+                $"Склад: {product.StockQuantity} | {status}");
         }
 
         var rows = result.Items
@@ -3525,11 +3525,11 @@ public class TelegramUpdateHandler
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-            "📱 Mini App-da məhsul yarat",
+            "📱 Создать товар в Mini App",
             "admin:product:add"),
 
         InlineKeyboardButton.WithCallbackData(
-            "⬅️ Admin menyusu",
+            "⬅️ Меню администратора",
             "admin:menu")
         ]);
 
@@ -3545,26 +3545,26 @@ public class TelegramUpdateHandler
     {
         var product = await _productService.GetByIdAsync(productId)
             ?? throw new KeyNotFoundException(
-                "Product was not found.");
+                "Товар не найден.");
 
-        var status = product.IsActive ? "Aktiv" : "Passiv";
+        var status = product.IsActive ? "Активный" : "Неактивный";
 
         var rows = new List<InlineKeyboardButton[]>
     {
         new[]
         {
             InlineKeyboardButton.WithCallbackData(
-                "💰 Qiyməti dəyiş",
+                "💰 Изменить цену",
                 $"admin:price:{product.Id}"),
 
             InlineKeyboardButton.WithCallbackData(
-                "📊 Stoku dəyiş",
+                "📊 Изменить остаток",
                 $"admin:stock-edit:{product.Id}")
         },
         new[]
         {
             InlineKeyboardButton.WithCallbackData(
-                "📜 Stok tarixçəsi",
+                "📜 История склада",
                 $"admin:product:history:{product.Id}")
         }
     };
@@ -3573,34 +3573,34 @@ public class TelegramUpdateHandler
         [
             product.IsActive
             ? InlineKeyboardButton.WithCallbackData(
-                "⛔ Passiv et",
+                "⛔ Деактивировать",
                 $"admin:product:deactivate:{product.Id}")
             : InlineKeyboardButton.WithCallbackData(
-                "✅ Aktiv et",
+                "✅ Активировать",
                 $"admin:product:activate:{product.Id}")
         ]);
 
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-            "⬅️ Məhsullar",
+            "⬅️ Товары",
             "admin:products")
         ]);
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-                "✏️ Adı dəyiş",
+                "✏️ Изменить название",
                 $"admin:edit-name:{product.Id}"),
 
             InlineKeyboardButton.WithCallbackData(
-                "📝 Açıqlamanı dəyiş",
+                "📝 Изменить описание",
                 $"admin:edit-description:{product.Id}")
         ]);
 
         rows.Add(
         [
             InlineKeyboardButton.WithCallbackData(
-        "🖼 Şəkli dəyiş",
+        "🖼 Изменить изображение",
         $"admin:edit-image:{product.Id}")
         ]);
 
@@ -3608,9 +3608,9 @@ public class TelegramUpdateHandler
             chatId,
             $"📦 {product.Name}\n\n" +
             $"Kod: {product.Code}\n" +
-            $"Qiymət: {product.Price:0.00} AZN\n" +
-            $"Stok: {product.StockQuantity}\n" +
-            $"Status: {status}\n\n" +
+            $"Цена: {product.Price:0.00} AZN\n" +
+            $"Склад: {product.StockQuantity}\n" +
+            $"Статус: {status}\n\n" +
             product.Description,
             replyMarkup: new InlineKeyboardMarkup(rows));
     }
@@ -3627,14 +3627,14 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Stok tarixçəsi yoxdur.");
+                "История склада пуста.");
 
             return;
         }
 
         var text = new StringBuilder();
 
-        text.AppendLine("📜 Son stok dəyişiklikləri");
+        text.AppendLine("📜 Последние изменения склада");
         text.AppendLine();
 
         foreach (var movement in history.Take(10))
@@ -3646,7 +3646,7 @@ public class TelegramUpdateHandler
                 $"{sign}{movement.QuantityChange} | " +
                 $"{movement.PreviousQuantity} → {movement.NewQuantity}");
 
-            text.AppendLine($"Səbəb: {movement.Reason}");
+            text.AppendLine($"Причина: {movement.Reason}");
             text.AppendLine();
         }
 
@@ -3657,10 +3657,10 @@ public class TelegramUpdateHandler
     private async Task<StaffDto> GetRequiredAdminStaffAsync(long telegramUserId)
     {
         var admin = await _staffService.GetByTelegramUserIdAsync(telegramUserId)
-            ?? throw new UnauthorizedAccessException("Admin qeydiyyatı tapılmadı.");
+            ?? throw new UnauthorizedAccessException("Учётная запись администратора не найдена.");
 
         if (admin.Role != StaffRole.Admin || !admin.IsActive)
-            throw new UnauthorizedAccessException("Bu əməliyyat yalnız aktiv admin üçündür.");
+            throw new UnauthorizedAccessException("Эта операция доступна только активному администратору.");
 
         return admin;
     }
@@ -3684,16 +3684,16 @@ public class TelegramUpdateHandler
 
         rows.Add(
         [
-            InlineKeyboardButton.WithCallbackData("➕ İşçi əlavə et", "admin:staff:add")
+            InlineKeyboardButton.WithCallbackData("➕ Добавить сотрудника", "admin:staff:add")
         ]);
         rows.Add(
         [
-            InlineKeyboardButton.WithCallbackData("⬅️ Admin menyusu", "admin:menu")
+            InlineKeyboardButton.WithCallbackData("⬅️ Меню администратора", "admin:menu")
         ]);
 
         await _botClient.SendMessage(
             chatId,
-            workers.Count == 0 ? "👷 Hələ işçi əlavə edilməyib." : "👷 İşçilər",
+            workers.Count == 0 ? "👷 Сотрудники пока не добавлены." : "👷 Сотрудники",
             replyMarkup: new InlineKeyboardMarkup(rows));
     }
 
@@ -3701,26 +3701,26 @@ public class TelegramUpdateHandler
     {
         var worker = (await _staffService.GetAllAsync())
             .FirstOrDefault(staff => staff.Id == staffId)
-            ?? throw new KeyNotFoundException("İşçi tapılmadı.");
+            ?? throw new KeyNotFoundException("Сотрудник не найден.");
         var assignments = await _assignmentService.GetWorkerAssignmentsAsync(worker.Id);
         var shipments = await _shipmentService.GetWorkerShipmentsAsync(worker.Id);
 
         var text = new StringBuilder()
             .AppendLine($"👷 {GetStaffName(worker)}")
-            .AppendLine($"Status: {(worker.IsActive ? "Aktiv" : "Passiv")}")
+            .AppendLine($"Статус: {(worker.IsActive ? "Активный" : "Неактивный")}")
             .AppendLine($"Telegram ID: {worker.TelegramUserId}")
             .AppendLine(string.IsNullOrWhiteSpace(worker.Username)
-                ? "Username: yoxdur"
+                ? "Имя пользователя: не указано"
                 : $"Username: @{worker.Username}")
-            .AppendLine($"Aktiv sifarişlər: {assignments.Count}")
-            .AppendLine($"Göndərişlər: {shipments.Count}");
+            .AppendLine($"Активные заказы: {assignments.Count}")
+            .AppendLine($"Отправки: {shipments.Count}");
 
         foreach (var assignment in assignments.Take(10))
             text.AppendLine($"• #{assignment.OrderNumber}");
 
         var toggle = worker.IsActive
-            ? InlineKeyboardButton.WithCallbackData("⛔ Passiv et", $"admin:staff:off:{worker.Id}")
-            : InlineKeyboardButton.WithCallbackData("✅ Aktiv et", $"admin:staff:on:{worker.Id}");
+            ? InlineKeyboardButton.WithCallbackData("⛔ Деактивировать", $"admin:staff:off:{worker.Id}")
+            : InlineKeyboardButton.WithCallbackData("✅ Активировать", $"admin:staff:on:{worker.Id}");
 
         await _botClient.SendMessage(
             chatId,
@@ -3728,7 +3728,7 @@ public class TelegramUpdateHandler
             replyMarkup: new InlineKeyboardMarkup(new[]
             {
                 new[] { toggle },
-                new[] { InlineKeyboardButton.WithCallbackData("⬅️ İşçilər", "admin:staff") }
+                new[] { InlineKeyboardButton.WithCallbackData("⬅️ Сотрудники", "admin:staff") }
             }));
     }
 
@@ -3743,7 +3743,7 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Aktiv işçi yoxdur. Əvvəlcə İşçilər menyusundan işçi əlavə edin.");
+                "Нет активных сотрудников. Сначала добавьте сотрудника в меню «Сотрудники».");
             return;
         }
 
@@ -3755,12 +3755,12 @@ public class TelegramUpdateHandler
         }).ToList();
         rows.Add(
         [
-            InlineKeyboardButton.WithCallbackData("⬅️ Sifariş", $"admin:actions:{orderNumber}")
+            InlineKeyboardButton.WithCallbackData("⬅️ Заказ", $"admin:actions:{orderNumber}")
         ]);
 
         await _botClient.SendMessage(
             chatId,
-            $"#{orderNumber} sifarişi üçün işçi seçin:",
+            $"#{orderNumber}: выберите сотрудника для заказа:",
             replyMarkup: new InlineKeyboardMarkup(rows));
     }
 
@@ -3771,9 +3771,9 @@ public class TelegramUpdateHandler
         {
             await _botClient.SendMessage(
                 chatId,
-                "Bu sifariş üçün göndəriş yoxdur.",
+                "Для этого заказа нет отправок.",
                 replyMarkup: new InlineKeyboardMarkup(
-                    InlineKeyboardButton.WithCallbackData("⬅️ Sifariş", $"admin:actions:{orderNumber}")));
+                    InlineKeyboardButton.WithCallbackData("⬅️ Заказ", $"admin:actions:{orderNumber}")));
             return;
         }
 
@@ -3784,25 +3784,25 @@ public class TelegramUpdateHandler
     private async Task SendAdminShipmentAsync(long chatId, ShipmentDto shipment)
     {
         var text = new StringBuilder()
-            .AppendLine($"🚚 Sifariş #{shipment.OrderNumber}")
-            .AppendLine($"İşçi: {shipment.StaffName}")
-            .AppendLine($"Status: {GetShipmentStatusText(shipment.Status)}")
-            .AppendLine($"Ünvan: {shipment.DeliveryAddress}")
+            .AppendLine($"🚚 Заказ №{shipment.OrderNumber}")
+            .AppendLine($"Сотрудник: {shipment.StaffName}")
+            .AppendLine($"Статус: {GetShipmentStatusText(shipment.Status)}")
+            .AppendLine($"Адрес: {shipment.DeliveryAddress}")
             .AppendLine();
         foreach (var item in shipment.Items)
-            text.AppendLine($"• {item.ProductName}: {item.Quantity} ədəd");
+            text.AppendLine($"• {item.ProductName}: {item.Quantity} шт.");
 
         var rows = new List<InlineKeyboardButton[]>();
         var nextButton = shipment.Status switch
         {
             ShipmentStatus.Assigned => InlineKeyboardButton.WithCallbackData(
-                "📦 Hazırlanır", $"admin:ss:p:{shipment.Id}"),
+                "📦 Готовится", $"admin:ss:p:{shipment.Id}"),
             ShipmentStatus.Preparing => InlineKeyboardButton.WithCallbackData(
-                "✅ Hazırdır", $"admin:ss:r:{shipment.Id}"),
+                "✅ Готово", $"admin:ss:r:{shipment.Id}"),
             ShipmentStatus.Ready => InlineKeyboardButton.WithCallbackData(
-                "🚗 Çatdırılmaya çıxdı", $"admin:ss:o:{shipment.Id}"),
+                "🚗 Выехал на доставку", $"admin:ss:o:{shipment.Id}"),
             ShipmentStatus.OutForDelivery => InlineKeyboardButton.WithCallbackData(
-                "✅ Çatdırıldı", $"admin:ss:d:{shipment.Id}"),
+                "✅ Доставлено", $"admin:ss:d:{shipment.Id}"),
             _ => null
         };
         if (nextButton is not null)
@@ -3810,11 +3810,11 @@ public class TelegramUpdateHandler
         if (shipment.Status is not ShipmentStatus.Delivered and not ShipmentStatus.Cancelled)
             rows.Add(
             [
-                InlineKeyboardButton.WithCallbackData("❌ Göndərişi ləğv et", $"admin:ss:c:{shipment.Id}")
+                InlineKeyboardButton.WithCallbackData("❌ Отменить отправку", $"admin:ss:c:{shipment.Id}")
             ]);
         rows.Add(
         [
-            InlineKeyboardButton.WithCallbackData("⬅️ Sifariş", $"admin:actions:{shipment.OrderNumber}")
+            InlineKeyboardButton.WithCallbackData("⬅️ Заказ", $"admin:actions:{shipment.OrderNumber}")
         ]);
 
         await _botClient.SendMessage(
@@ -3829,12 +3829,12 @@ public class TelegramUpdateHandler
 
     private static string GetShipmentStatusText(ShipmentStatus status) => status switch
     {
-        ShipmentStatus.Assigned => "İşçiyə təyin edilib",
-        ShipmentStatus.Preparing => "Hazırlanır",
-        ShipmentStatus.Ready => "Hazırdır",
-        ShipmentStatus.OutForDelivery => "Çatdırılmaya çıxıb",
-        ShipmentStatus.Delivered => "Çatdırılıb",
-        ShipmentStatus.Cancelled => "Ləğv edilib",
+        ShipmentStatus.Assigned => "Назначено сотруднику",
+        ShipmentStatus.Preparing => "Готовится",
+        ShipmentStatus.Ready => "Готово",
+        ShipmentStatus.OutForDelivery => "Выехал на доставку",
+        ShipmentStatus.Delivered => "Доставлено",
+        ShipmentStatus.Cancelled => "Отменён",
         _ => status.ToString()
     };
 
@@ -3859,13 +3859,13 @@ public class TelegramUpdateHandler
         {
             if (!long.TryParse(message.Text, out var workerTelegramId) || workerTelegramId <= 0)
             {
-                await _botClient.SendMessage(message.Chat.Id, "Düzgün Telegram ID yazın.");
+                await _botClient.SendMessage(message.Chat.Id, "Введите корректный Telegram ID.");
                 return true;
             }
 
             session.WorkerTelegramUserId = workerTelegramId;
             session.AdminInputStep = AdminInputStep.AwaitingWorkerFirstName;
-            await _botClient.SendMessage(message.Chat.Id, "İşçinin adını yazın:");
+            await _botClient.SendMessage(message.Chat.Id, "Введите имя сотрудника:");
             return true;
         }
 
@@ -3873,7 +3873,7 @@ public class TelegramUpdateHandler
         {
             if (string.IsNullOrWhiteSpace(message.Text))
             {
-                await _botClient.SendMessage(message.Chat.Id, "Ad boş ola bilməz.");
+                await _botClient.SendMessage(message.Chat.Id, "Имя не может быть пустым.");
                 return true;
             }
 
@@ -3881,27 +3881,27 @@ public class TelegramUpdateHandler
             session.AdminInputStep = AdminInputStep.AwaitingWorkerLastName;
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "İşçinin soyadını yazın və ya ‘Keç’ yazın:");
+                "Введите фамилию сотрудника или отправьте «Пропустить»:");
             return true;
         }
 
         if (session.AdminInputStep == AdminInputStep.AwaitingWorkerLastName)
         {
             session.WorkerLastName = message.Text?.Equals(
-                "Keç", StringComparison.OrdinalIgnoreCase) == true
+                "Пропустить", StringComparison.OrdinalIgnoreCase) == true
                 ? null
                 : message.Text?.Trim();
             session.AdminInputStep = AdminInputStep.AwaitingWorkerUsername;
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "İşçinin Telegram username-ni yazın (@ olmadan) və ya ‘Keç’ yazın:");
+                "Введите username сотрудника в Telegram без @ или отправьте «Пропустить»:");
             return true;
         }
 
         if (session.AdminInputStep == AdminInputStep.AwaitingWorkerUsername)
         {
             var username = message.Text?.Equals(
-                "Keç", StringComparison.OrdinalIgnoreCase) == true
+                "Пропустить", StringComparison.OrdinalIgnoreCase) == true
                 ? null
                 : message.Text?.Trim().TrimStart('@');
 
@@ -3913,7 +3913,7 @@ public class TelegramUpdateHandler
                     username));
 
             _sessionStore.Clear(telegramUserId);
-            await _botClient.SendMessage(message.Chat.Id, "✅ İşçi əlavə edildi.");
+            await _botClient.SendMessage(message.Chat.Id, "✅ Сотрудник добавлен.");
             await SendAdminStaffDetailAsync(message.Chat.Id, worker.Id);
             return true;
         }
@@ -3931,7 +3931,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Məhsul adı boş ola bilməz.");
+                    "Название товара не может быть пустым.");
 
                 return true;
             }
@@ -3940,7 +3940,7 @@ public class TelegramUpdateHandler
                 await _productService.GetByIdAsync(
                     session.ProductId.Value)
                 ?? throw new KeyNotFoundException(
-                    "Product was not found.");
+                    "Товар не найден.");
 
             await _productService.UpdateDetailsAsync(
                 product.Id,
@@ -3954,7 +3954,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "✅ Məhsulun adı dəyişdirildi.");
+                "✅ Название товара изменено.");
 
             await SendAdminProductDetailAsync(
                 message.Chat.Id,
@@ -3970,7 +3970,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Açıqlama boş ola bilməz.");
+                    "Описание не может быть пустым.");
 
                 return true;
             }
@@ -3979,7 +3979,7 @@ public class TelegramUpdateHandler
                 await _productService.GetByIdAsync(
                     session.ProductId.Value)
                 ?? throw new KeyNotFoundException(
-                    "Product was not found.");
+                    "Товар не найден.");
 
             await _productService.UpdateDetailsAsync(
                 product.Id,
@@ -3993,7 +3993,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "✅ Məhsulun açıqlaması dəyişdirildi.");
+                "✅ Описание товара изменено.");
 
             await SendAdminProductDetailAsync(
                 message.Chat.Id,
@@ -4012,7 +4012,7 @@ public class TelegramUpdateHandler
                 imageReference = message.Photo[^1].FileId;
             }
             else if (message.Text?.Equals(
-                         "Şəkli sil",
+                         "Удалить изображение",
                          StringComparison.OrdinalIgnoreCase) == true)
             {
                 imageReference = null;
@@ -4021,7 +4021,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Yeni şəkli göndərin və ya “Şəkli sil” yazın.");
+                    "Отправьте новое изображение или напишите «Удалить изображение».");
 
                 return true;
             }
@@ -4030,7 +4030,7 @@ public class TelegramUpdateHandler
                 await _productService.GetByIdAsync(
                     session.ProductId.Value)
                 ?? throw new KeyNotFoundException(
-                    "Product was not found.");
+                    "Товар не найден.");
 
             await _productService.UpdateDetailsAsync(
                 product.Id,
@@ -4044,7 +4044,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "✅ Məhsulun şəkli yeniləndi.");
+                "✅ Изображение товара обновлено.");
 
             await SendAdminProductDetailAsync(
                 message.Chat.Id,
@@ -4069,7 +4069,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Qiyməti düzgün formatda yazın. Məsələn: 2.50");
+                    "Введите цену в правильном формате. Например: 2.50");
 
                 return true;
             }
@@ -4083,7 +4083,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "✅ Qiymət dəyişdirildi.");
+                "✅ Цена изменена.");
 
             await SendAdminProductDetailAsync(
                 message.Chat.Id,
@@ -4102,7 +4102,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Düzgün miqdar yazın.");
+                    "Введите корректное количество.");
 
                 return true;
             }
@@ -4113,8 +4113,8 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "Stok dəyişikliyinin səbəbini yazın.\n" +
-                "Məsələn: Yeni mal qəbulu");
+                "Укажите причину изменения остатка.\n" +
+                "Например: новое поступление товара");
 
             return true;
         }
@@ -4126,7 +4126,7 @@ public class TelegramUpdateHandler
             {
                 await _botClient.SendMessage(
                     message.Chat.Id,
-                    "Səbəb boş ola bilməz.");
+                    "Причина не может быть пустой.");
 
                 return true;
             }
@@ -4163,7 +4163,7 @@ public class TelegramUpdateHandler
 
             await _botClient.SendMessage(
                 message.Chat.Id,
-                "✅ Stok yeniləndi.");
+                "✅ Остаток обновлён.");
 
             await SendAdminProductDetailAsync(
                 message.Chat.Id,
@@ -4180,22 +4180,22 @@ public class TelegramUpdateHandler
         return status switch
         {
             SpecialOrderStatus.NotRequired =>
-                "Tələb olunmur",
+                "Не требуется",
 
             SpecialOrderStatus.Pending =>
-                "Admin əməliyyatı gözlənilir",
+                "Ожидается действие администратора",
 
             SpecialOrderStatus.OrderedFromSupplier =>
-                "Təchizatçıdan sifariş edilib",
+                "Заказано у поставщика",
 
             SpecialOrderStatus.Arrived =>
-                "Məhsul gəlib",
+                "Товар поступил",
 
             SpecialOrderStatus.Completed =>
-                "Tamamlanıb",
+                "Завершён",
 
             SpecialOrderStatus.Cancelled =>
-                "Ləğv edilib",
+                "Отменён",
 
             _ => status.ToString()
         };

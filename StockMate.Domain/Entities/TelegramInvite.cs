@@ -11,7 +11,7 @@ public sealed class TelegramInvite
         if (string.IsNullOrWhiteSpace(token))
         {
             throw new ArgumentException(
-                "Invite token is required.",
+                "Токен приглашения обязателен.",
                 nameof(token));
         }
 
@@ -43,7 +43,7 @@ public sealed class TelegramInvite
         if (IsUsed)
         {
             throw new InvalidOperationException(
-                "Invite link has already been used.");
+                "Ссылка-приглашение уже использована.");
         }
 
         UsedByTelegramUserId = telegramUserId;

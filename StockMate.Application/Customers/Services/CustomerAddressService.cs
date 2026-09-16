@@ -118,7 +118,7 @@ public sealed class CustomerAddressService
                        telegramUserId,
                        cancellationToken)
                ?? throw new KeyNotFoundException(
-                   "Customer was not found.");
+                   "Клиент не найден.");
     }
 
     private async Task<CustomerAddress> GetRequiredOwnedAddressAsync(
@@ -131,12 +131,12 @@ public sealed class CustomerAddressService
                 addressId,
                 cancellationToken)
             ?? throw new KeyNotFoundException(
-                "Customer address was not found.");
+                "Адрес клиента не найден.");
 
         if (address.CustomerId != customerId)
         {
             throw new UnauthorizedAccessException(
-                "This address does not belong to the customer.");
+                "Этот адрес не принадлежит клиенту.");
         }
 
         return address;

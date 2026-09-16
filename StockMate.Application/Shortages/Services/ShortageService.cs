@@ -55,7 +55,7 @@ public sealed class ShortageService : IShortageService
         if (productId == Guid.Empty)
         {
             throw new ArgumentException(
-                "Product ID is required.",
+                "ID товара обязателен.",
                 nameof(productId));
         }
 
@@ -115,7 +115,7 @@ public sealed class ShortageService : IShortageService
     private static string GetCustomerName(Customer? customer)
     {
         if (customer is null)
-            return "Müştəri tapılmadı";
+            return "Клиент не найден";
 
         return string.Join(
             " ",

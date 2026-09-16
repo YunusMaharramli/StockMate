@@ -14,11 +14,11 @@ public sealed class ShortageExcelExporter
 
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add(
-            "Çatışmayan məhsullar");
+            "Недостающие товары");
 
-        worksheet.Cell(1, 1).Value = "Məhsul";
-        worksheet.Cell(1, 2).Value = "Məhsul kodu";
-        worksheet.Cell(1, 3).Value = "Çatışmayan miqdar";
+        worksheet.Cell(1, 1).Value = "Товар";
+        worksheet.Cell(1, 2).Value = "Код товара";
+        worksheet.Cell(1, 3).Value = "Недостающее количество";
 
         var header = worksheet.Range(1, 1, 1, 3);
         header.Style.Font.Bold = true;

@@ -202,6 +202,6 @@ public sealed class TelegramInitDataValidator
     private static UnauthorizedAccessException AccessDenied()
     {
         return new UnauthorizedAccessException(
-            "İcazəniz yoxdur.");
+            "У вас нет доступа.");
     }
 }

@@ -24,7 +24,7 @@ public class Staff
         if (string.IsNullOrWhiteSpace(firstName))
         {
             throw new ArgumentException(
-                "First name is required.",
+                "Имя обязательно.",
                 nameof(firstName));
         }
 

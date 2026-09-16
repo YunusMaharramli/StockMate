@@ -15,7 +15,7 @@ public class Cart
     public Cart(Guid customerId)
     {
         if (customerId == Guid.Empty)
-            throw new ArgumentException("Customer ID is required.", nameof(customerId));
+            throw new ArgumentException("ID клиента обязателен.", nameof(customerId));
 
         Id = Guid.NewGuid();
         CustomerId = customerId;
@@ -44,10 +44,10 @@ public class Cart
     CartItemFulfillmentMode fulfillmentMode)
     {
         if (IsExpired)
-            throw new InvalidOperationException("Cart has expired.");
+            throw new InvalidOperationException("Срок действия корзины истёк.");
 
         if (productId == Guid.Empty)
-            throw new ArgumentException("Product ID is required.", nameof(productId));
+            throw new ArgumentException("ID товара обязателен.", nameof(productId));
 
         if (quantity <= 0)
             throw new ArgumentOutOfRangeException(nameof(quantity));

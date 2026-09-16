@@ -15,7 +15,7 @@ public sealed class StockPurchaseItem
         if (stockPurchaseId == Guid.Empty)
         {
             throw new ArgumentException(
-                "Stock purchase ID is required.",
+                "ID закупки обязателен.",
                 nameof(stockPurchaseId));
         }
 
@@ -23,14 +23,14 @@ public sealed class StockPurchaseItem
         {
             throw new ArgumentOutOfRangeException(
                 nameof(quantity),
-                "Quantity must be greater than zero.");
+                "Количество должно быть больше нуля.");
         }
 
         if (unitCost < 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(unitCost),
-                "Unit cost cannot be negative.");
+                "Цена за единицу не может быть отрицательной.");
         }
 
         Id = Guid.NewGuid();

@@ -47,7 +47,7 @@ public sealed class MiniAppAuthorizationFilter
                 identity.Role))
         {
             throw new UnauthorizedAccessException(
-                "İcazəniz yoxdur.");
+                "У вас нет доступа.");
         }
 
         context.HttpContext.Items[IdentityItemKey] =
@@ -68,6 +68,6 @@ public sealed class MiniAppAuthorizationFilter
         }
 
         throw new UnauthorizedAccessException(
-            "Mini App istifadəçisi müəyyən edilmədi.");
+            "Не удалось определить пользователя Mini App.");
     }
 }

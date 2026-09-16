@@ -13,12 +13,12 @@ public sealed class Subcategory
     {
         if (categoryId == Guid.Empty)
             throw new ArgumentException(
-                "Category ID is required.",
+                "ID категории обязателен.",
                 nameof(categoryId));
 
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException(
-                "Subcategory name is required.",
+                "Название подкатегории обязательно.",
                 nameof(name));
 
         if (sortOrder < 0)
@@ -55,7 +55,7 @@ public sealed class Subcategory
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException(
-                "Subcategory name is required.",
+                "Название подкатегории обязательно.",
                 nameof(name));
 
         SetName(name);
@@ -75,7 +75,7 @@ public sealed class Subcategory
     {
         if (IsArchived)
             throw new InvalidOperationException(
-                "Archived subcategory cannot be activated.");
+                "Архивную подкатегорию нельзя активировать.");
 
         IsActive = true;
         UpdatedAtUtc = DateTime.UtcNow;

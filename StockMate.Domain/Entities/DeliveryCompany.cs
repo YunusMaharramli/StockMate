@@ -10,7 +10,7 @@ public sealed class DeliveryCompany
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException(
-                "Delivery company name is required.",
+                "Название службы доставки обязательно.",
                 nameof(name));
 
         Id = Guid.NewGuid();
@@ -33,7 +33,7 @@ public sealed class DeliveryCompany
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException(
-                "Delivery company name is required.",
+                "Название службы доставки обязательно.",
                 nameof(name));
 
         Name = name.Trim();

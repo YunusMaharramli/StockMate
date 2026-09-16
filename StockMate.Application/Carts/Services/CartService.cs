@@ -49,18 +49,18 @@ public class CartService : ICartService
                           request.ProductId,
                           cancellationToken)
                       ?? throw new KeyNotFoundException(
-                          $"Product '{request.ProductId}' was not found.");
+                          $"Товар '{request.ProductId}' не найден.");
 
         if (!product.IsCatalogVisible)
             throw new InvalidOperationException(
-                "The product is not currently available in the catalog.");
+                "Товар сейчас недоступен в каталоге.");
 
         if (request.FulfillmentMode ==
                 CartItemFulfillmentMode.StockOnly &&
             request.Quantity > product.StockQuantity)
         {
             throw new InvalidOperationException(
-                "Requested quantity exceeds the available stock. " +
+                "Запрошенное количество превышает доступный остаток. " +
                 "Choose special order or reduce the quantity.");
         }
 
@@ -136,7 +136,7 @@ public class CartService : ICartService
                    telegramUserId,
                    cancellationToken)
                ?? throw new KeyNotFoundException(
-                   $"Customer with Telegram ID '{telegramUserId}' was not found.");
+                   $"Клиент с Telegram ID '{telegramUserId}' не найден.");
     }
 
     private async Task<Cart> GetOrCreateCartAsync(

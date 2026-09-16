@@ -14,7 +14,7 @@ public sealed class MiniAppAuthorizeAttribute : Attribute
         if (allowedRoles.Length == 0)
         {
             throw new ArgumentException(
-                "Ən azı bir Mini App rolu göstərilməlidir.",
+                "Необходимо указать хотя бы одну роль Mini App.",
                 nameof(allowedRoles));
         }
 

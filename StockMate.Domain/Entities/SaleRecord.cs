@@ -16,7 +16,7 @@ public sealed class SaleRecord
         if (soldAtUtc == default)
         {
             throw new ArgumentException(
-                "Sale date is required.",
+                "Дата продажи обязательна.",
                 nameof(soldAtUtc));
         }
 
@@ -63,14 +63,14 @@ public sealed class SaleRecord
         if (orderItem.OrderId != OrderId)
         {
             throw new InvalidOperationException(
-                "The order item does not belong to this sale order.");
+                "Позиция заказа не относится к этой продаже.");
         }
 
         if (_items.Any(item =>
                 item.OrderItemId == orderItem.Id))
         {
             throw new InvalidOperationException(
-                "The order item already exists in this sale record.");
+                "Позиция заказа уже есть в этой записи о продаже.");
         }
 
         var item = new SaleRecordItem(
