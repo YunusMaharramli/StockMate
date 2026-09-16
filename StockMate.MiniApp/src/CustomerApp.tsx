@@ -29,12 +29,12 @@ const demoProducts: CustomerCatalogProduct[] = [
 ];
 
 const orderLabels: Record<CustomerOrder['status'], string> = {
-  PendingAdminApproval: 'Admin təsdiqi gözlənilir',
-  Confirmed: 'Təsdiqlənib',
-  Preparing: 'Hazırlanır',
-  Delivering: 'Çatdırılmadadır',
-  Completed: 'Tamamlanıb',
-  Cancelled: 'Ləğv edilib',
+  PendingAdminApproval: 'Ожидает подтверждения администратора',
+  Confirmed: 'Подтверждён',
+  Preparing: 'Готовится',
+  Delivering: 'Доставляется',
+  Completed: 'Завершён',
+  Cancelled: 'Отменён',
 };
 
 function money(value?: number) {
@@ -42,7 +42,7 @@ function money(value?: number) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('az-AZ', {
+  return new Intl.DateTimeFormat('ru-RU', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
@@ -96,7 +96,7 @@ export default function CustomerApp({
 
   useEffect(() => {
     if (demo) {
-      setProfile({ firstName: 'Demo', phoneNumber: '' });
+      setProfile({ firstName: 'Демо', phoneNumber: '' });
       return;
     }
 
@@ -132,7 +132,7 @@ export default function CustomerApp({
       if (successMessage) setNotice(successMessage);
       return true;
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Əməliyyat yerinə yetirilmədi.');
+      setError(reason instanceof Error ? reason.message : 'Не удалось выполнить операцию.');
       return false;
     } finally {
       setLoading(false);
@@ -166,7 +166,7 @@ export default function CustomerApp({
       } : await api.setCustomerCartItem(product.id, current + amount));
       setSelectedProduct(null);
       setQuantity(1);
-    }, 'Məhsul səbətə əlavə edildi.');
+    }, 'Товар добавлен в корзину.');
   }
 
   async function changeCartQuantity(productId: string, nextQuantity: number) {
@@ -195,11 +195,11 @@ export default function CustomerApp({
   async function completeCheckout(event: FormEvent) {
     event.preventDefault();
     if (!checkoutPhone.trim() || checkoutPhone.replace(/\D/g, '').length < 9) {
-      setError('Telefon nömrəsini düzgün yazın.');
+      setError('Введите корректный номер телефона.');
       return;
     }
     if (!addressId || !companyId) {
-      setError('Ünvan və çatdırılma şirkəti seçilməlidir.');
+      setError('Выберите адрес и службу доставки.');
       return;
     }
 
@@ -213,7 +213,7 @@ export default function CustomerApp({
       setProfile(value => value ? { ...value, phoneNumber: checkoutPhone.trim() } : value);
       setPhone(checkoutPhone.trim());
       setCart(await api.getCustomerCart());
-    }, 'Sifarişiniz qəbul edildi.');
+    }, 'Ваш заказ принят.');
 
     if (completed) {
       setCheckoutOpen(false);
@@ -226,7 +226,7 @@ export default function CustomerApp({
     await run(async () => {
       if (!demo) await api.updateCustomerPhone(phone);
       setProfile(value => value ? { ...value, phoneNumber: phone.trim() } : value);
-    }, 'Telefon nömrəsi yadda saxlanıldı.');
+    }, 'Номер телефона сохранён.');
   }
 
   async function addAddress(event: FormEvent) {
@@ -238,26 +238,26 @@ export default function CustomerApp({
         : await api.createCustomerAddress(newAddress.trim());
       setAddresses(values => [...values, created]);
       setNewAddress('');
-    }, 'Ünvan əlavə edildi.');
+    }, 'Адрес добавлен.');
   }
 
   async function removeAddress(address: CustomerAddress) {
-    if (!window.confirm('Bu ünvan silinsin?')) return;
+    if (!window.confirm('Удалить этот адрес?')) return;
     await run(async () => {
       if (!demo) await api.deleteCustomerAddress(address.id);
       setAddresses(values => values.filter(value => value.id !== address.id));
-    }, 'Ünvan silindi.');
+    }, 'Адрес удалён.');
   }
 
   async function editAddress(address: CustomerAddress) {
-    const addressLine = window.prompt('Ünvanı dəyişin:', address.addressLine)?.trim();
+    const addressLine = window.prompt('Измените адрес:', address.addressLine)?.trim();
     if (!addressLine || addressLine === address.addressLine) return;
     await run(async () => {
       const updated = demo
         ? { ...address, addressLine }
         : await api.updateCustomerAddress(address.id, addressLine);
       setAddresses(values => values.map(value => value.id === address.id ? updated : value));
-    }, 'Ünvan yeniləndi.');
+    }, 'Адрес обновлён.');
   }
 
   async function openSection(next: CustomerSection) {
@@ -281,13 +281,13 @@ export default function CustomerApp({
   }
 
   async function cancelOrder(order: CustomerOrder) {
-    if (!window.confirm(`#${order.orderNumber} sifarişi ləğv edilsin?`)) return;
+    if (!window.confirm(`Отменить заказ №${order.orderNumber}?`)) return;
     await run(async () => {
       if (!demo) await api.cancelCustomerOrder(order.orderNumber);
       const orderList = demo ? orders.map(value => value.orderNumber === order.orderNumber ? { ...value, status: 'Cancelled' as const } : value) : await api.getMyOrders();
       setOrders(orderList);
       setSelectedOrder(null);
-    }, 'Sifariş ləğv edildi.');
+    }, 'Заказ отменён.');
   }
 
   const displayName = [identity?.firstName ?? profile?.firstName, identity?.lastName ?? profile?.lastName]
@@ -297,7 +297,7 @@ export default function CustomerApp({
   return <main className="customer-shell">
     <header className="customer-header">
       <div className="customer-brand">S</div>
-      <div><strong>StockMate</strong><span>{displayName || 'Mağaza'}</span></div>
+      <div><strong>StockMate</strong><span>{displayName || 'Магазин'}</span></div>
       <button className="cart-shortcut" onClick={() => void openSection('cart')}>🛒<b>{cart.items.length}</b></button>
     </header>
 
@@ -305,28 +305,28 @@ export default function CustomerApp({
     {notice && <Message text={notice} close={() => setNotice('')} />}
 
     {section === 'shop' && <section className="customer-screen">
-      <div className="customer-hero"><span>Rahat seçim, sürətli sifariş</span><h1>Məhsullar</h1><p>İstədiyiniz məhsulu seçib səbətə əlavə edin.</p></div>
+      <div className="customer-hero"><span>Удобный выбор, быстрый заказ</span><h1>Товары</h1><p>Выберите нужный товар и добавьте его в корзину.</p></div>
       <form className="customer-filters" onSubmit={applyFilters}>
-        <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Məhsul və ya kod axtar" />
+        <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Поиск по товару или коду" />
         <div className="customer-filter-row">
           <select value={categoryId} onChange={event => { setCategoryId(event.target.value); setSubcategoryName(''); }}>
-            <option value="">Bütün markalar</option>
+            <option value="">Все марки</option>
             {categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
           <select value={subcategoryName} onChange={event => setSubcategoryName(event.target.value)}>
-            <option value="">Bütün ölçülər</option>
+            <option value="">Все размеры</option>
             {visibleSubcategoryNames.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
-        <div className="customer-filter-actions"><button className="customer-primary" type="submit">Göstər</button><button type="button" onClick={() => { setCategoryId(''); setSubcategoryName(''); setSearch(''); void run(() => loadCatalog(1, '', '', '')); }}>Təmizlə</button></div>
+        <div className="customer-filter-actions"><button className="customer-primary" type="submit">Показать</button><button type="button" onClick={() => { setCategoryId(''); setSubcategoryName(''); setSearch(''); void run(() => loadCatalog(1, '', '', '')); }}>Сбросить</button></div>
       </form>
       <div className="customer-product-grid">
         {catalog.items.map(product => <article className="customer-product-card" key={product.id} onClick={() => { setSelectedProduct(product); setQuantity(1); }}>
           {product.imageReference ? <img src={productImageUrl(product.id)} alt={product.name} /> : <div className="customer-product-placeholder">🛍</div>}
           <div><small>{[product.categoryName, product.subcategoryName].filter(Boolean).join(' · ') || product.code}</small><h2>{product.name}</h2><strong>{money(product.price)}</strong></div>
-          <button aria-label={`${product.name} səbətə əlavə et`} onClick={event => { event.stopPropagation(); void addToCart(product, 1); }}>+</button>
+          <button aria-label={`Добавить ${product.name} в корзину`} onClick={event => { event.stopPropagation(); void addToCart(product, 1); }}>+</button>
         </article>)}
-        {!catalog.items.length && <CustomerEmpty text="Uyğun məhsul tapılmadı" />}
+        {!catalog.items.length && <CustomerEmpty text="Подходящие товары не найдены" />}
       </div>
       {catalog.totalPages > 1 && <div className="customer-pagination">
         <button disabled={catalog.pageNumber <= 1} onClick={() => run(() => loadCatalog(catalog.pageNumber - 1))}>‹</button>
@@ -336,36 +336,36 @@ export default function CustomerApp({
     </section>}
 
     {section === 'cart' && <section className="customer-screen">
-      <div className="customer-page-title"><div><span>Sifarişiniz</span><h1>Səbət</h1></div>{cart.items.length > 0 && <button onClick={() => run(async () => { if (!demo) await api.clearCustomerCart(); setCart(emptyCart); }, 'Səbət təmizləndi.')}>Təmizlə</button>}</div>
+      <div className="customer-page-title"><div><span>Ваш заказ</span><h1>Корзина</h1></div>{cart.items.length > 0 && <button onClick={() => run(async () => { if (!demo) await api.clearCustomerCart(); setCart(emptyCart); }, 'Корзина очищена.')}>Очистить</button>}</div>
       <div className="customer-list">
         {cart.items.map(item => <article className="customer-cart-card" key={item.productId}><div><small>{item.productCode}</small><h2>{item.productName}</h2><strong>{money(item.lineTotal)}</strong></div><div className="quantity-control"><button onClick={() => changeCartQuantity(item.productId, item.quantity - 1)}>−</button><b>{item.quantity}</b><button onClick={() => changeCartQuantity(item.productId, item.quantity + 1)}>+</button></div></article>)}
-        {!cart.items.length && <CustomerEmpty text="Səbətiniz boşdur" />}
+        {!cart.items.length && <CustomerEmpty text="Ваша корзина пуста" />}
       </div>
-      {cart.items.length > 0 && <div className="customer-cart-total"><span>Məhsulların cəmi</span><strong>{money(cart.productsTotal)}</strong><button className="customer-primary" onClick={beginCheckout}>Sifarişi tamamla</button></div>}
+      {cart.items.length > 0 && <div className="customer-cart-total"><span>Стоимость товаров</span><strong>{money(cart.productsTotal)}</strong><button className="customer-primary" onClick={beginCheckout}>Оформить заказ</button></div>}
     </section>}
 
     {section === 'orders' && <section className="customer-screen">
-      <div className="customer-page-title"><div><span>İzləmə və tarixçə</span><h1>Sifarişlərim</h1></div></div>
-      <div className="customer-list">{orders.map(order => <button className="customer-order-card" key={order.orderNumber} onClick={() => setSelectedOrder(order)}><div><small>{formatDate(order.createdAtUtc)}</small><h2>#{order.orderNumber}</h2></div><div><span>{orderLabels[order.status]}</span><strong>{money(order.totalAmount)}</strong></div></button>)}{!orders.length && <CustomerEmpty text="Hələ sifarişiniz yoxdur" />}</div>
+      <div className="customer-page-title"><div><span>Отслеживание и история</span><h1>Мои заказы</h1></div></div>
+      <div className="customer-list">{orders.map(order => <button className="customer-order-card" key={order.orderNumber} onClick={() => setSelectedOrder(order)}><div><small>{formatDate(order.createdAtUtc)}</small><h2>№{order.orderNumber}</h2></div><div><span>{orderLabels[order.status]}</span><strong>{money(order.totalAmount)}</strong></div></button>)}{!orders.length && <CustomerEmpty text="У вас пока нет заказов" />}</div>
     </section>}
 
     {section === 'profile' && <section className="customer-screen">
-      <div className="customer-page-title"><div><span>Əlaqə məlumatları</span><h1>Profil</h1></div></div>
-      <form className="customer-panel" onSubmit={savePhone}><label>Telefon nömrəsi<input value={phone} onChange={event => setPhone(event.target.value)} placeholder="+994501234567" /></label><button className="customer-primary">Telefonu yadda saxla</button></form>
-      <form className="customer-panel" onSubmit={addAddress}><h2>Ünvanlarım</h2><div className="customer-addresses">{addresses.map(address => <div key={address.id}><span>📍 {address.addressLine}</span><span className="customer-address-actions"><button type="button" onClick={() => editAddress(address)}>✎</button><button type="button" onClick={() => removeAddress(address)}>×</button></span></div>)}</div><label>Yeni ünvan<textarea value={newAddress} onChange={event => setNewAddress(event.target.value)} placeholder="Küçə, bina, mənzil..." /></label><button className="customer-primary">Ünvan əlavə et</button></form>
+      <div className="customer-page-title"><div><span>Контактные данные</span><h1>Профиль</h1></div></div>
+      <form className="customer-panel" onSubmit={savePhone}><label>Номер телефона<input value={phone} onChange={event => setPhone(event.target.value)} placeholder="+994501234567" /></label><button className="customer-primary">Сохранить номер</button></form>
+      <form className="customer-panel" onSubmit={addAddress}><h2>Мои адреса</h2><div className="customer-addresses">{addresses.map(address => <div key={address.id}><span>📍 {address.addressLine}</span><span className="customer-address-actions"><button type="button" onClick={() => editAddress(address)}>✎</button><button type="button" onClick={() => removeAddress(address)}>×</button></span></div>)}</div><label>Новый адрес<textarea value={newAddress} onChange={event => setNewAddress(event.target.value)} placeholder="Улица, дом, квартира..." /></label><button className="customer-primary">Добавить адрес</button></form>
     </section>}
 
-    {selectedProduct && <div className="customer-modal" onClick={() => setSelectedProduct(null)}><div className="customer-sheet" onClick={event => event.stopPropagation()}><button className="customer-close" onClick={() => setSelectedProduct(null)}>×</button>{selectedProduct.imageReference ? <img src={productImageUrl(selectedProduct.id)} alt={selectedProduct.name} /> : <div className="customer-detail-placeholder">🛍</div>}<small>{[selectedProduct.categoryName, selectedProduct.subcategoryName].filter(Boolean).join(' · ')}</small><h2>{selectedProduct.name}</h2><p>{selectedProduct.description}</p><strong className="customer-price">{money(selectedProduct.price)}</strong><div className="customer-add-row"><div className="quantity-control"><button onClick={() => setQuantity(value => Math.max(1, value - 1))}>−</button><b>{quantity}</b><button onClick={() => setQuantity(value => Math.min(99, value + 1))}>+</button></div><button className="customer-primary" onClick={() => addToCart(selectedProduct, quantity)}>Səbətə əlavə et</button></div></div></div>}
+    {selectedProduct && <div className="customer-modal" onClick={() => setSelectedProduct(null)}><div className="customer-sheet" onClick={event => event.stopPropagation()}><button className="customer-close" onClick={() => setSelectedProduct(null)}>×</button>{selectedProduct.imageReference ? <img src={productImageUrl(selectedProduct.id)} alt={selectedProduct.name} /> : <div className="customer-detail-placeholder">🛍</div>}<small>{[selectedProduct.categoryName, selectedProduct.subcategoryName].filter(Boolean).join(' · ')}</small><h2>{selectedProduct.name}</h2><p>{selectedProduct.description}</p><strong className="customer-price">{money(selectedProduct.price)}</strong><div className="customer-add-row"><div className="quantity-control"><button onClick={() => setQuantity(value => Math.max(1, value - 1))}>−</button><b>{quantity}</b><button onClick={() => setQuantity(value => Math.min(99, value + 1))}>+</button></div><button className="customer-primary" onClick={() => addToCart(selectedProduct, quantity)}>Добавить в корзину</button></div></div></div>}
 
-    {checkoutOpen && <div className="customer-modal" onClick={() => setCheckoutOpen(false)}><form className="customer-sheet" onClick={event => event.stopPropagation()} onSubmit={completeCheckout}><button type="button" className="customer-close" onClick={() => setCheckoutOpen(false)}>×</button><small>Sifariş məlumatları</small><h2>Təsdiq</h2><label>Telefon nömrəsi<input value={checkoutPhone} onChange={event => setCheckoutPhone(event.target.value)} placeholder="+994501234567" /></label><label>Çatdırılma ünvanı<select value={addressId} onChange={event => setAddressId(event.target.value)}><option value="">Ünvan seçin</option>{addresses.map(address => <option key={address.id} value={address.id}>{address.addressLine}</option>)}</select></label>{!addresses.length && <p className="customer-warning">Əvvəlcə Profil bölməsindən ünvan əlavə edin.</p>}<label>Çatdırılma şirkəti<select value={companyId} onChange={event => setCompanyId(event.target.value)}><option value="">Şirkət seçin</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></label><div className="customer-confirm-summary"><span>Məhsullar <b>{money(cart.productsTotal)}</b></span><small>Çatdırılma haqqını admin müəyyən edəcək.</small></div><button className="customer-primary" disabled={!addresses.length || !companies.length}>Sifarişi təsdiqlə</button></form></div>}
+    {checkoutOpen && <div className="customer-modal" onClick={() => setCheckoutOpen(false)}><form className="customer-sheet" onClick={event => event.stopPropagation()} onSubmit={completeCheckout}><button type="button" className="customer-close" onClick={() => setCheckoutOpen(false)}>×</button><small>Данные заказа</small><h2>Подтверждение</h2><label>Номер телефона<input value={checkoutPhone} onChange={event => setCheckoutPhone(event.target.value)} placeholder="+994501234567" /></label><label>Адрес доставки<select value={addressId} onChange={event => setAddressId(event.target.value)}><option value="">Выберите адрес</option>{addresses.map(address => <option key={address.id} value={address.id}>{address.addressLine}</option>)}</select></label>{!addresses.length && <p className="customer-warning">Сначала добавьте адрес в разделе «Профиль».</p>}<label>Служба доставки<select value={companyId} onChange={event => setCompanyId(event.target.value)}><option value="">Выберите службу</option>{companies.map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></label><div className="customer-confirm-summary"><span>Товары <b>{money(cart.productsTotal)}</b></span><small>Стоимость доставки определит администратор.</small></div><button className="customer-primary" disabled={!addresses.length || !companies.length}>Подтвердить заказ</button></form></div>}
 
-    {selectedOrder && <div className="customer-modal" onClick={() => setSelectedOrder(null)}><div className="customer-sheet" onClick={event => event.stopPropagation()}><button className="customer-close" onClick={() => setSelectedOrder(null)}>×</button><small>{formatDate(selectedOrder.createdAtUtc)}</small><h2>Sifariş #{selectedOrder.orderNumber}</h2><span className="customer-order-status">{orderLabels[selectedOrder.status]}</span><div className="customer-order-items">{selectedOrder.items.map(item => <div key={item.productId}><span><b>{item.quantity} ×</b> {item.productName}</span><strong>{money(item.lineTotal)}</strong></div>)}</div><div className="customer-order-meta"><p>📞 {selectedOrder.phoneNumber}</p><p>📍 {selectedOrder.deliveryAddress}</p><p>🚚 {selectedOrder.deliveryCompanyName ?? '—'}</p></div><div className="customer-confirm-summary"><span>Məhsullar <b>{money(selectedOrder.productsTotal)}</b></span>{selectedOrder.deliveryFee !== undefined && <span>Çatdırılma <b>{money(selectedOrder.deliveryFee)}</b></span>}<span>Cəmi <b>{money(selectedOrder.totalAmount)}</b></span></div>{selectedOrder.status === 'PendingAdminApproval' && <button className="customer-danger" onClick={() => cancelOrder(selectedOrder)}>Sifarişi ləğv et</button>}</div></div>}
+    {selectedOrder && <div className="customer-modal" onClick={() => setSelectedOrder(null)}><div className="customer-sheet" onClick={event => event.stopPropagation()}><button className="customer-close" onClick={() => setSelectedOrder(null)}>×</button><small>{formatDate(selectedOrder.createdAtUtc)}</small><h2>Заказ №{selectedOrder.orderNumber}</h2><span className="customer-order-status">{orderLabels[selectedOrder.status]}</span><div className="customer-order-items">{selectedOrder.items.map(item => <div key={item.productId}><span><b>{item.quantity} ×</b> {item.productName}</span><strong>{money(item.lineTotal)}</strong></div>)}</div><div className="customer-order-meta"><p>📞 {selectedOrder.phoneNumber}</p><p>📍 {selectedOrder.deliveryAddress}</p><p>🚚 {selectedOrder.deliveryCompanyName ?? '—'}</p></div><div className="customer-confirm-summary"><span>Товары <b>{money(selectedOrder.productsTotal)}</b></span>{selectedOrder.deliveryFee !== undefined && <span>Доставка <b>{money(selectedOrder.deliveryFee)}</b></span>}<span>Итого <b>{money(selectedOrder.totalAmount)}</b></span></div>{selectedOrder.status === 'PendingAdminApproval' && <button className="customer-danger" onClick={() => cancelOrder(selectedOrder)}>Отменить заказ</button>}</div></div>}
 
     <nav className="customer-nav">
-      <NavButton active={section === 'shop'} icon="⌂" text="Mağaza" onClick={() => void openSection('shop')} />
-      <NavButton active={section === 'cart'} icon="🛒" text="Səbət" badge={cart.items.length} onClick={() => void openSection('cart')} />
-      <NavButton active={section === 'orders'} icon="▣" text="Sifarişlər" onClick={() => void openSection('orders')} />
-      <NavButton active={section === 'profile'} icon="♙" text="Profil" onClick={() => void openSection('profile')} />
+      <NavButton active={section === 'shop'} icon="⌂" text="Магазин" onClick={() => void openSection('shop')} />
+      <NavButton active={section === 'cart'} icon="🛒" text="Корзина" badge={cart.items.length} onClick={() => void openSection('cart')} />
+      <NavButton active={section === 'orders'} icon="▣" text="Заказы" onClick={() => void openSection('orders')} />
+      <NavButton active={section === 'profile'} icon="♙" text="Профиль" onClick={() => void openSection('profile')} />
     </nav>
     {loading && <div className="customer-busy"><span /></div>}
   </main>;

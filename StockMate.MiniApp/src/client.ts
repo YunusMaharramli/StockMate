@@ -37,7 +37,7 @@ function initData() {
 
 async function readError(response: Response) {
   const problem = await response.json().catch(() => null) as { detail?: string; title?: string } | null;
-  return problem?.detail ?? problem?.title ?? 'Əməliyyatı yerinə yetirmək mümkün olmadı.';
+  return problem?.detail ?? problem?.title ?? 'Не удалось выполнить операцию.';
 }
 
 async function ensureSuccessful(response: Response): Promise<void> {
@@ -92,7 +92,7 @@ async function downloadFile(path: string): Promise<void> {
           if (accepted) {
             resolve();
           } else {
-            reject(new Error('Fayl endirməsi ləğv edildi.'));
+            reject(new Error('Скачивание файла отменено.'));
           }
         },
       );

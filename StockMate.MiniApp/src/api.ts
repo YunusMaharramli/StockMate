@@ -15,7 +15,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new Error(problem?.detail ?? 'Əməliyyatı yerinə yetirmək mümkün olmadı.');
+    throw new Error(problem?.detail ?? 'Не удалось выполнить операцию.');
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
