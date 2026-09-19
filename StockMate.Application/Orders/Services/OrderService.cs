@@ -1,4 +1,5 @@
-﻿using StockMate.Application.Orders.Models;
+﻿using StockMate.Application.Common.Outbox;
+using StockMate.Application.Orders.Models;
 using StockMate.Application.Persistence;
 using StockMate.Application.Sales.Services;
 using StockMate.Domain.Entities;
@@ -16,6 +17,7 @@ public class OrderService : IOrderService
     private readonly ICustomerAddressRepository _customerAddressRepository;
     private readonly IDeliveryCompanyRepository _deliveryCompanyRepository;
     private readonly ISaleRecordingService _saleRecordingService;
+    private readonly IOutboxWriter _outbox;
 
     public OrderService(
         IOrderRepository orderRepository,
@@ -25,7 +27,8 @@ public class OrderService : IOrderService
         IShipmentRepository shipmentRepository,
         ICustomerAddressRepository customerAddressRepository,
         IDeliveryCompanyRepository deliveryCompanyRepository,
-        ISaleRecordingService saleRecordingService)
+        ISaleRecordingService saleRecordingService,
+        IOutboxWriter outbox)
     {
         _orderRepository = orderRepository;
         _cartRepository = cartRepository;
@@ -35,6 +38,7 @@ public class OrderService : IOrderService
         _customerAddressRepository = customerAddressRepository;
         _deliveryCompanyRepository = deliveryCompanyRepository;
         _saleRecordingService = saleRecordingService;
+        _outbox = outbox;
     }
 
     public async Task<OrderDto> CheckoutAsync(
@@ -283,6 +287,11 @@ public class OrderService : IOrderService
         }
 
         order.Confirm();
+
+        await _outbox.EnqueueAsync(
+            OutboxMessageTypes.OrderConfirmed,
+            new OrderConfirmedOutboxPayload(order.OrderNumber),
+            cancellationToken);
 
         await _orderRepository.SaveChangesAsync(cancellationToken);
     }

@@ -10,6 +10,8 @@ public class OrderShipmentConfiguration : IEntityTypeConfiguration<OrderShipment
     {
         builder.ToTable("OrderShipments");
         builder.HasKey(shipment => shipment.Id);
+        builder.Property(shipment => shipment.Version)
+             .IsRowVersion();
         builder.Property(shipment => shipment.Status).HasConversion<int>().IsRequired();
         builder.Property(shipment => shipment.CreatedAtUtc).IsRequired();
         builder.HasIndex(shipment => shipment.OrderId);

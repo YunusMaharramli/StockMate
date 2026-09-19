@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using StockMate.Application.Notifications;
 using StockMate.Application.Orders.Services;
 using StockMate.Bot.Security;
 using StockMate.Bot.Security.Models;
@@ -13,14 +12,11 @@ namespace StockMate.Bot.Controllers;
 public class MiniAppOrdersController : ControllerBase
 {
     private readonly IOrderService _orderService;
-    private readonly IWorkflowNotificationService _notifications;
 
     public MiniAppOrdersController(
-        IOrderService orderService,
-        IWorkflowNotificationService notifications)
+    IOrderService orderService)
     {
         _orderService = orderService;
-        _notifications = notifications;
     }
 
     [HttpGet("new")]
@@ -49,10 +45,14 @@ public class MiniAppOrdersController : ControllerBase
     }
 
     [HttpPut("{orderNumber:long}/confirm")]
-    public async Task<IActionResult> Confirm(long orderNumber, CancellationToken cancellationToken)
+    public async Task<IActionResult> Confirm(
+    long orderNumber,
+    CancellationToken cancellationToken)
     {
-        await _orderService.ConfirmAsync(orderNumber, cancellationToken);
-        await _notifications.NotifyOrderConfirmedAsync(orderNumber, cancellationToken);
+        await _orderService.ConfirmAsync(
+            orderNumber,
+            cancellationToken);
+
         return NoContent();
     }
 

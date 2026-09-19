@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
+using StockMate.Application.Common.Idempotency;
+using StockMate.Application.Common.Outbox;
 using StockMate.Application.Notifications;
 using StockMate.Application.Orders.Models;
 using StockMate.Application.Orders.Services;
 using StockMate.Bot.Controllers.Models;
+using StockMate.Bot.Extensions;
 using StockMate.Bot.Security;
 using StockMate.Bot.Security.Models;
 using StockMate.Domain.Enums;
@@ -15,14 +18,17 @@ namespace StockMate.Bot.Controllers;
 public sealed class MiniAppCustomerOrdersController : ControllerBase
 {
     private readonly IOrderService _orders;
-    private readonly IWorkflowNotificationService _notifications;
+    private readonly IOutboxWriter _outbox;
+    private readonly IIdempotencyService _idempotency;
 
     public MiniAppCustomerOrdersController(
-        IOrderService orders,
-        IWorkflowNotificationService notifications)
+    IOrderService orders,
+    IOutboxWriter outbox,
+    IIdempotencyService idempotency)
     {
         _orders = orders;
-        _notifications = notifications;
+        _outbox = outbox;
+        _idempotency = idempotency;
     }
 
     [HttpGet]
@@ -49,24 +55,38 @@ public sealed class MiniAppCustomerOrdersController : ControllerBase
 
     [HttpPost("checkout")]
     public async Task<ActionResult<CustomerOrderResponse>> Checkout(
-        [FromBody] CustomerCheckoutRequest request,
-        CancellationToken cancellationToken)
+    [FromBody] CustomerCheckoutRequest request,
+    CancellationToken cancellationToken)
     {
-        var customer = MiniAppAuthorizationFilter.GetIdentity(HttpContext);
-        var order = await _orders.CheckoutAsync(
+        var customer =
+            MiniAppAuthorizationFilter.GetIdentity(HttpContext);
+
+        var operationId =
+            Request.GetRequiredOperationId();
+
+        var response = await _idempotency.ExecuteAsync(
+            operationId,
             customer.TelegramUserId,
-            request.CustomerAddressId,
-            request.DeliveryCompanyId,
+            IdempotencyOperationTypes.CustomerCheckout,
+            request,
+            async token =>
+            {
+                var order = await _orders.CheckoutAsync(
+                    customer.TelegramUserId,
+                    request.CustomerAddressId,
+                    request.DeliveryCompanyId,
+                    token);
+
+                await _outbox.EnqueueAsync(
+                        OutboxMessageTypes.OrderCreated,
+                        new OrderCreatedOutboxPayload(order.OrderNumber),
+                        token);
+
+                return Map(order);
+            },
             cancellationToken);
 
-        await _notifications.NotifyOrderCreatedAsync(
-            order.OrderNumber,
-            cancellationToken);
-
-        return CreatedAtAction(
-            nameof(GetByNumber),
-            new { orderNumber = order.OrderNumber },
-            Map(order));
+        return Ok(response);
     }
 
     [HttpPost("{orderNumber:long}/cancel")]

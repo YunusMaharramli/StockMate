@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using StockMate.Domain.Entities;
+using StockMate.Infrastructure.Persistence.Entities;
 
 namespace StockMate.Infrastructure.Persistence;
 
@@ -43,6 +44,10 @@ public class StockMateDbContext : DbContext
         Set<SaleRecordItem>();
     public DbSet<TelegramInvite> TelegramInvites =>
     Set<TelegramInvite>();
+    public DbSet<ProcessedOperation> ProcessedOperations =>
+    Set<ProcessedOperation>();
+    public DbSet<OutboxMessage> OutboxMessages =>
+    Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -12,6 +12,9 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
 
         builder.HasKey(order => order.Id);
 
+        builder.Property(order => order.Version)
+            .IsRowVersion();
+
         builder.Property(order => order.OrderNumber)
             .UseIdentityByDefaultColumn()
             .ValueGeneratedOnAdd();

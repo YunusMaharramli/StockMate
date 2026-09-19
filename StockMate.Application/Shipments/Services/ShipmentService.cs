@@ -1,4 +1,4 @@
-using StockMate.Application.Notifications;
+using StockMate.Application.Common.Outbox;
 using StockMate.Application.Persistence;
 using StockMate.Application.Sales.Services;
 using StockMate.Application.Shipments.Models;
@@ -14,7 +14,7 @@ public class ShipmentService : IShipmentService
     private readonly IOrderAssignmentRepository _assignmentRepository;
     private readonly IOrderRepository _orderRepository;
     private readonly IStaffRepository _staffRepository;
-    private readonly IWorkflowNotificationService _notifications;
+    private readonly IOutboxWriter _outbox;
     private readonly ISaleRecordingService _saleRecordingService;
 
     public ShipmentService(
@@ -22,15 +22,16 @@ public class ShipmentService : IShipmentService
         IOrderAssignmentRepository assignmentRepository,
         IOrderRepository orderRepository,
         IStaffRepository staffRepository,
-        IWorkflowNotificationService notifications,
+        IOutboxWriter outbox,
         ISaleRecordingService saleRecordingService)
     {
         _shipmentRepository = shipmentRepository;
         _assignmentRepository = assignmentRepository;
         _orderRepository = orderRepository;
         _staffRepository = staffRepository;
+        _outbox = outbox;
+        _saleRecordingService =
         _saleRecordingService = saleRecordingService;
-        _notifications = notifications;
     }
 
     public async Task<ShipmentDto> CreateReadyShipmentAsync(
@@ -173,12 +174,23 @@ public class ShipmentService : IShipmentService
         }
 
         await _shipmentRepository.AddHistoryAsync(
-            new ShipmentStatusHistory(shipment.Id, actor.Id, previous, newStatus),
+            new ShipmentStatusHistory(
+                shipment.Id,
+                actor.Id,
+                previous,
+                newStatus),
             cancellationToken);
-        await _shipmentRepository.SaveChangesAsync(cancellationToken);
 
-        await _notifications.NotifyShipmentStatusChangedAsync(
-            order.OrderNumber, shipment.Status, GetFullName(worker), cancellationToken);
+        await _outbox.EnqueueAsync(
+            OutboxMessageTypes.ShipmentStatusChanged,
+            new ShipmentStatusChangedOutboxPayload(
+                order.OrderNumber,
+                shipment.Status,
+                GetFullName(worker)),
+            cancellationToken);
+
+        await _shipmentRepository.SaveChangesAsync(
+            cancellationToken);
 
         return await MapAsync(shipment, order, worker, cancellationToken);
     }

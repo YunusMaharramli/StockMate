@@ -219,6 +219,10 @@ export const api = {
   deleteCustomerAddress: (id: string) => request<void>(`/api/miniapp/customer/profile/addresses/${id}`, { method: 'DELETE' }),
   getCustomerDeliveryCompanies: () => request<DeliveryCompany[]>('/api/miniapp/customer/profile/delivery-companies'),
   getMyOrders: () => request<CustomerOrder[]>('/api/miniapp/customer/orders'),
-  checkoutCustomerOrder: (customerAddressId: string, deliveryCompanyId: string) => request<CustomerOrder>('/api/miniapp/customer/orders/checkout', { method: 'POST', body: JSON.stringify({ customerAddressId, deliveryCompanyId }) }),
+  checkoutCustomerOrder: (customerAddressId: string, deliveryCompanyId: string, operationId: string) => request<CustomerOrder>('/api/miniapp/customer/orders/checkout', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': operationId },
+    body: JSON.stringify({ customerAddressId, deliveryCompanyId }),
+  }),
   cancelCustomerOrder: (orderNumber: number) => request<void>(`/api/miniapp/customer/orders/${orderNumber}/cancel`, { method: 'POST' }),
 };

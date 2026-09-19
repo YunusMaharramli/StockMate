@@ -321,6 +321,12 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAtUtc");
@@ -458,6 +464,12 @@ namespace StockMate.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 
@@ -902,6 +914,88 @@ namespace StockMate.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("TelegramInvites", (string)null);
+                });
+
+            modelBuilder.Entity("StockMate.Infrastructure.Persistence.Entities.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("MessageType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProcessedAtUtc", "NextAttemptAtUtc", "CreatedAtUtc");
+
+                    b.ToTable("OutboxMessages", (string)null);
+                });
+
+            modelBuilder.Entity("StockMate.Infrastructure.Persistence.Entities.ProcessedOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OperationType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<long>("TelegramUserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("TelegramUserId", "OperationId")
+                        .IsUnique();
+
+                    b.ToTable("ProcessedOperations", (string)null);
                 });
 
             modelBuilder.Entity("StockMate.Domain.Entities.Cart", b =>

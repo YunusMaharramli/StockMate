@@ -19,6 +19,7 @@ public class OrderShipment
     }
 
     public Guid Id { get; private set; }
+    public uint Version { get; private set; }
     public Guid OrderId { get; private set; }
     public Guid StaffId { get; private set; }
     public ShipmentStatus Status { get; private set; }

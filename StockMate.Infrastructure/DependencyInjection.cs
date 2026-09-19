@@ -1,7 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using StockMate.Application.Common.Idempotency;
+using StockMate.Application.Common.Outbox;
 using StockMate.Application.Persistence;
 using StockMate.Application.Shortages.Exports;
+using StockMate.Infrastructure.Idempotency;
+using StockMate.Infrastructure.Outbox;
 using StockMate.Infrastructure.Persistence;
 using StockMate.Infrastructure.Repositories;
 using StockMate.Infrastructure.Shortages.Exports;
@@ -38,6 +42,9 @@ public static class DependencyInjection
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<ISubcategoryRepository, SubcategoryRepository>();
         services.AddSingleton<IShortageExcelExporter, ShortageExcelExporter>();
+        services.AddScoped<IIdempotencyService, IdempotencyService>();
+        services.AddScoped<IOutboxWriter, OutboxWriter>();
+        services.AddScoped<IOutboxMessageStore, OutboxMessageStore>();
         return services;
     }
 }

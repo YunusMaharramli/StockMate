@@ -38,7 +38,7 @@ public class Order
     }
 
     public Guid Id { get; private set; }
-
+    public uint Version { get; private set; }
     public long OrderNumber { get; private set; }
 
     public Guid CustomerId { get; private set; }

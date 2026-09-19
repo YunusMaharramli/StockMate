@@ -1,4 +1,4 @@
-using StockMate.Application.Notifications;
+using StockMate.Application.Common.Outbox;
 using StockMate.Application.Persistence;
 using StockMate.Application.Staff.Models;
 using StockMate.Domain.Entities;
@@ -13,20 +13,19 @@ public class OrderAssignmentService : IOrderAssignmentService
     private readonly IOrderRepository _orderRepository;
     private readonly IStaffRepository _staffRepository;
     private readonly IShipmentRepository _shipmentRepository;
-    private readonly IWorkflowNotificationService _notifications;
-
+    private readonly IOutboxWriter _outbox;
     public OrderAssignmentService(
         IOrderAssignmentRepository assignmentRepository,
         IOrderRepository orderRepository,
         IStaffRepository staffRepository,
         IShipmentRepository shipmentRepository,
-        IWorkflowNotificationService notifications)
+        IOutboxWriter outbox)
     {
         _assignmentRepository = assignmentRepository;
         _orderRepository = orderRepository;
         _staffRepository = staffRepository;
         _shipmentRepository = shipmentRepository;
-        _notifications = notifications;
+        _outbox = outbox;
     }
 
     public async Task<OrderAssignmentDto> AssignAsync(
@@ -66,12 +65,22 @@ public class OrderAssignmentService : IOrderAssignmentService
 
         current?.Release();
         var assignment = new OrderAssignment(order.Id, worker.Id, admin.Id);
-        await _assignmentRepository.AddAsync(assignment, cancellationToken);
-        await _assignmentRepository.SaveChangesAsync(cancellationToken);
+        await _assignmentRepository.AddAsync(
+                assignment,
+                cancellationToken);
 
         var workerName = GetFullName(worker);
-        await _notifications.NotifyOrderAssignedAsync(
-            orderNumber, worker.TelegramUserId, workerName, cancellationToken);
+
+        await _outbox.EnqueueAsync(
+            OutboxMessageTypes.OrderAssigned,
+            new OrderAssignedOutboxPayload(
+                orderNumber,
+                worker.TelegramUserId,
+                workerName),
+            cancellationToken);
+
+        await _assignmentRepository.SaveChangesAsync(
+            cancellationToken);
 
         return Map(assignment, orderNumber, worker);
     }

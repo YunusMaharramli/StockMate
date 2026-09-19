@@ -4,6 +4,7 @@ using StockMate.Application.Notifications;
 using StockMate.Bot.Downloads;
 using StockMate.Bot.ErrorHandling;
 using StockMate.Bot.Options;
+using StockMate.Bot.Outbox;
 using StockMate.Bot.Security;
 using StockMate.Bot.Telegram.Handlers;
 using StockMate.Bot.Telegram.Services;
@@ -97,6 +98,8 @@ builder.Services.AddSingleton<IMiniAppMenuButtonService, MiniAppMenuButtonServic
 builder.Services.AddSingleton<IMiniAppDownloadTicketStore, MiniAppDownloadTicketStore>();
 builder.Services.AddScoped<IUserAccessChangedNotifier, UserAccessChangedNotifier>();
 builder.Services.AddScoped<IWorkflowNotificationService,WorkflowNotificationService>();
+builder.Services.AddScoped<OutboxMessageDispatcher>();
+builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddSingleton<ITelegramInitDataValidator, TelegramInitDataValidator>();
 builder.Services.AddScoped<IMiniAppIdentityService, TelegramMiniAppIdentityService>();
 

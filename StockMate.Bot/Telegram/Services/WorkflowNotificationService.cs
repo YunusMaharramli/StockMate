@@ -5,6 +5,7 @@ using StockMate.Application.Orders.Services;
 using StockMate.Bot.Options;
 using StockMate.Domain.Enums;
 using Telegram.Bot;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace StockMate.Bot.Telegram.Services;
 
@@ -45,13 +46,38 @@ public class WorkflowNotificationService : IWorkflowNotificationService
             order.CustomerId,
             cancellationToken)
             ?? throw new KeyNotFoundException("Клиент не найден.");
-
-        await SafeSendAsync(
+        if (_options.AdminUserId > 0)
+        {
+            await SafeSendAsync(
             _options.AdminUserId,
             $"🆕 Новый заказ #{orderNumber}\n" +
             $"Клиент: {GetCustomerName(customer.FirstName, customer.LastName)}\n" +
             $"Сумма: {order.ProductsTotal:0.00} AZN",
+            cancellationToken,
+            new InlineKeyboardMarkup(
+                new[]
+                {
+                    new[]
+                    {
+                        InlineKeyboardButton.WithCallbackData(
+                            "✅ Подтвердить",
+                            $"admin:confirm:{orderNumber}"),
+
+                        InlineKeyboardButton.WithCallbackData(
+                            "❌ Отменить",
+                            $"admin:cancel:{orderNumber}")
+                    }
+                }));
+        await SafeSendAsync(
+            customer.TelegramUserId,
+            $"✅ Ваш заказ принят.\n\n" +
+            $"Номер заказа: #{order.OrderNumber}\n" +
+            $"Товары: {order.ProductsTotal:0.00} AZN\n" +
+            "Стоимость доставки будет согласована " +
+            "с администратором.",
             cancellationToken);
+        }
+        
     }
 
     public async Task NotifyOrderConfirmedAsync(
@@ -157,23 +183,33 @@ public class WorkflowNotificationService : IWorkflowNotificationService
                 .Where(value => !string.IsNullOrWhiteSpace(value)));
 
     private async Task SafeSendAsync(
-        long telegramUserId,
-        string text,
-        CancellationToken cancellationToken)
+    long telegramUserId,
+    string text,
+    CancellationToken cancellationToken,
+    InlineKeyboardMarkup? replyMarkup = null)
     {
         try
         {
             await _botClient.SendMessage(
                 telegramUserId,
                 text,
+                replyMarkup: replyMarkup,
                 cancellationToken: cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception exception)
         {
             _logger.LogError(
                 exception,
-                "Telegram notification could not be sent to user {TelegramUserId}.",
+                "Telegram notification could not be sent to user " +
+                "{TelegramUserId}.",
                 telegramUserId);
+
+            throw;
         }
     }
 }

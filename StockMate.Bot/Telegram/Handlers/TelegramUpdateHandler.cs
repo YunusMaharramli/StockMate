@@ -2,6 +2,8 @@
 using StockMate.Application.Carts.Models;
 using StockMate.Application.Carts.Services;
 using StockMate.Application.Categories.Services;
+using StockMate.Application.Common.Idempotency;
+using StockMate.Application.Common.Outbox;
 using StockMate.Application.Customers.Models;
 using StockMate.Application.Customers.Services;
 using StockMate.Application.DeliveryCompanies.Services;
@@ -47,6 +49,8 @@ public class TelegramUpdateHandler
     private readonly ITelegramInviteService _telegramInviteService;
     private readonly IMiniAppMenuButtonService _miniAppMenuButtonService;
     private readonly TelegramOptions _telegramOptions;
+    private readonly IIdempotencyService _idempotency;
+    private readonly IOutboxWriter _outbox;
 
     public TelegramUpdateHandler(
     TelegramBotClient botClient,
@@ -65,7 +69,9 @@ public class TelegramUpdateHandler
     ITelegramInviteService telegramInviteService,
     IMiniAppMenuButtonService miniAppMenuButtonService,
     IOptions<TelegramOptions> telegramOptions,
-    ILogger<TelegramUpdateHandler> logger)
+    ILogger<TelegramUpdateHandler> logger,
+    IIdempotencyService idempotency,
+    IOutboxWriter outbox)
     {
         _botClient = botClient;
         _customerService = customerService;
@@ -84,6 +90,8 @@ public class TelegramUpdateHandler
         _telegramInviteService = telegramInviteService;
         _miniAppMenuButtonService = miniAppMenuButtonService;
         _telegramOptions = telegramOptions.Value;
+        _idempotency = idempotency;
+        _outbox = outbox;
     }
 
     public async Task HandleMessageAsync(
@@ -262,24 +270,39 @@ public class TelegramUpdateHandler
                 return;
             }
 
-            var order = await _orderService.CheckoutAsync(
+            var operationId =
+                IdempotencyOperationId.FromSource(
+                    $"telegram:callback:{query.Id}");
+
+            var payload = new
+            {
+                CustomerAddressId = customerAddressId,
+                DeliveryCompanyId = deliveryCompanyId
+            };
+
+            await _idempotency.ExecuteAsync(
+                operationId,
                 telegramUserId,
-                customerAddressId,
-                deliveryCompanyId);
+                IdempotencyOperationTypes.CustomerCheckout,
+                payload,
+                async cancellationToken =>
+                {
+                    var order = await _orderService.CheckoutAsync(
+                        telegramUserId,
+                        customerAddressId,
+                        deliveryCompanyId,
+                        cancellationToken);
+
+                    await _outbox.EnqueueAsync(
+                        OutboxMessageTypes.OrderCreated,
+                        new OrderCreatedOutboxPayload(
+                            order.OrderNumber),
+                        cancellationToken);
+
+                    return order;
+                });
 
             _sessionStore.Clear(telegramUserId);
-
-            await _botClient.SendMessage(
-                chatId,
-                $"✅ Ваш заказ принят.\n\n" +
-                $"Номер заказа: #{order.OrderNumber}\n" +
-                $"Товары: {order.ProductsTotal:0.00} AZN\n" +
-                "Стоимость доставки будет согласована с администратором.");
-
-            if (_telegramOptions.AdminUserId > 0)
-            {
-                await SendNewOrderToAdminAsync(order);
-            }
 
             return;
         }
@@ -506,17 +529,24 @@ public class TelegramUpdateHandler
                 return;
             }
 
-            await _orderService.ConfirmAsync(orderNumber);
+            var operationId =
+                IdempotencyOperationId.FromSource(
+                    $"telegram:callback:{query.Id}");
+
+            await _idempotency.ExecuteAsync(
+                operationId,
+                telegramUserId,
+                IdempotencyOperationTypes.OrderConfirm,
+                new { OrderNumber = orderNumber },
+                cancellationToken =>
+                    _orderService.ConfirmAsync(
+                        orderNumber,
+                        cancellationToken));
 
             var order =
                 await _orderService.GetByOrderNumberAsync(orderNumber)
                 ?? throw new KeyNotFoundException(
                     "Заказ не найден.");
-
-            var customer =
-                await _customerService.GetByIdAsync(order.CustomerId)
-                ?? throw new KeyNotFoundException(
-                    "Клиент не найден.");
 
             await _botClient.AnswerCallbackQuery(
                 query.Id,
@@ -528,11 +558,6 @@ public class TelegramUpdateHandler
                 $"✅ Заказ №{orderNumber} подтверждён администратором.\n" +
                 $"Статус: {order.Status}");
 
-            await _botClient.SendMessage(
-                customer.TelegramUserId,
-                $"✅ Ваш заказ подтверждён.\n\n" +
-                $"Номер заказа: #{orderNumber}\n" +
-                "Теперь ваш заказ перейдёт на этап подготовки.");
             await SendAdminOrderActionsAsync(
                 chatId,
                 orderNumber);
@@ -547,13 +572,34 @@ public class TelegramUpdateHandler
             if (!long.TryParse(numberText, out var orderNumber))
                 return;
 
-            await _orderService.SetDeliveryModeAsync(
-                orderNumber,
-                DeliveryMode.AllTogether);
+            var operationId =
+                IdempotencyOperationId.FromSource(
+                    $"telegram:callback:{query.Id}");
 
-            await NotifyOrderStatusAsync(
-                orderNumber,
-                "⏳ Все товары вашего заказа будут доставлены вместе. Мы сообщим, когда заказ будет готов.");
+            const DeliveryMode deliveryMode =
+                DeliveryMode.AllTogether;
+
+            await _idempotency.ExecuteAsync(
+                operationId,
+                telegramUserId,
+                IdempotencyOperationTypes.OrderDeliveryModeChange,
+                new
+                {
+                    OrderNumber = orderNumber,
+                    Mode = deliveryMode
+                },
+                async cancellationToken =>
+                {
+                    await _orderService.SetDeliveryModeAsync(
+                        orderNumber,
+                        deliveryMode,
+                        cancellationToken);
+
+                    await EnqueueOrderStatusAsync(
+                        orderNumber,
+                        "⏳ Все товары вашего заказа будут доставлены вместе. Мы сообщим, когда заказ будет готов.",
+                        cancellationToken);
+                });
 
             await SendAdminOrderActionsAsync(chatId, orderNumber);
             return;
@@ -566,9 +612,27 @@ public class TelegramUpdateHandler
             if (!long.TryParse(numberText, out var orderNumber))
                 return;
 
-            await _orderService.SetDeliveryModeAsync(
-                orderNumber,
-                DeliveryMode.PartialAllowed);
+            var operationId =
+                IdempotencyOperationId.FromSource(
+                    $"telegram:callback:{query.Id}");
+
+            const DeliveryMode deliveryMode =
+                DeliveryMode.PartialAllowed;
+
+            await _idempotency.ExecuteAsync(
+                operationId,
+                telegramUserId,
+                IdempotencyOperationTypes.OrderDeliveryModeChange,
+                new
+                {
+                    OrderNumber = orderNumber,
+                    Mode = deliveryMode
+                },
+                cancellationToken =>
+                    _orderService.SetDeliveryModeAsync(
+                        orderNumber,
+                        deliveryMode,
+                        cancellationToken));
 
             await SendAdminOrderActionsAsync(chatId, orderNumber);
             return;
@@ -584,27 +648,51 @@ public class TelegramUpdateHandler
             var before = await _orderService.GetByOrderNumberAsync(orderNumber)
                 ?? throw new KeyNotFoundException("Заказ не найден.");
 
-            var order = await _orderService.DeliverReadyItemsAsync(orderNumber);
-            var deliveredText = new StringBuilder();
+            var operationId =
+                IdempotencyOperationId.FromSource(
+                    $"telegram:callback:{query.Id}");
 
-            foreach (var item in order.Items)
-            {
-                var previous = before.Items
-                    .First(existing => existing.Id == item.Id)
-                    .DeliveredQuantity;
-                var deliveredNow = item.DeliveredQuantity - previous;
+            await _idempotency.ExecuteAsync(
+                operationId,
+                telegramUserId,
+                IdempotencyOperationTypes.OrderDeliverReady,
+                new { OrderNumber = orderNumber },
+                async cancellationToken =>
+                {
+                    var updatedOrder =
+                        await _orderService.DeliverReadyItemsAsync(
+                            orderNumber,
+                            cancellationToken);
 
-                if (deliveredNow > 0)
-                    deliveredText.AppendLine($"• {item.ProductName}: {deliveredNow} шт.");
-            }
+                    var deliveredText = new StringBuilder();
 
-            await NotifyOrderStatusAsync(
-                orderNumber,
-                $"🚚 Из вашего заказа отправлены следующие товары:\n\n" +
-                deliveredText +
-                (order.RemainingQuantity > 0
-                    ? $"\nОсталось товаров: {order.RemainingQuantity}. Мы сообщим, когда товары будут готовы."
-                    : "\nВаш заказ доставлен полностью."));
+                    foreach (var item in updatedOrder.Items)
+                    {
+                        var previous = before.Items
+                            .First(existing => existing.Id == item.Id)
+                            .DeliveredQuantity;
+                        var deliveredNow =
+                            item.DeliveredQuantity - previous;
+
+                        if (deliveredNow > 0)
+                        {
+                            deliveredText.AppendLine(
+                                $"• {item.ProductName}: " +
+                                $"{deliveredNow} шт.");
+                        }
+                    }
+
+                    await EnqueueOrderStatusAsync(
+                        orderNumber,
+                        $"🚚 Из вашего заказа отправлены следующие товары:\n\n" +
+                        deliveredText +
+                        (updatedOrder.RemainingQuantity > 0
+                            ? $"\nОсталось товаров: {updatedOrder.RemainingQuantity}. Мы сообщим, когда товары будут готовы."
+                            : "\nВаш заказ доставлен полностью."),
+                        cancellationToken);
+
+                    return updatedOrder;
+                });
 
             await SendAdminOrderActionsAsync(chatId, orderNumber);
             return;
@@ -644,11 +732,29 @@ public class TelegramUpdateHandler
             if (!long.TryParse(numberText, out var orderNumber))
                 return;
 
-            await _orderService.CancelRemainingItemsAsync(orderNumber);
+            var operationId =
+                IdempotencyOperationId.FromSource(
+                    $"telegram:callback:{query.Id}");
 
-            await NotifyOrderStatusAsync(
-                orderNumber,
-                "Оставшиеся недоставленные товары отменены администратором.");
+            await _idempotency.ExecuteAsync(
+                operationId,
+                telegramUserId,
+                IdempotencyOperationTypes.OrderCancelRemaining,
+                new { OrderNumber = orderNumber },
+                async cancellationToken =>
+                {
+                    var result =
+                        await _orderService.CancelRemainingItemsAsync(
+                            orderNumber,
+                            cancellationToken);
+
+                    await EnqueueOrderStatusAsync(
+                        orderNumber,
+                        "Оставшиеся недоставленные товары отменены администратором.",
+                        cancellationToken);
+
+                    return result;
+                });
 
             await SendAdminOrderActionsAsync(chatId, orderNumber);
             return;
@@ -661,11 +767,30 @@ public class TelegramUpdateHandler
             if (!long.TryParse(numberText, out var orderNumber))
                 return;
 
-            await _orderService.MarkAsPreparingAsync(orderNumber);
+            var operationId =
+                IdempotencyOperationId.FromSource(
+                    $"telegram:callback:{query.Id}");
 
-            await NotifyOrderStatusAsync(
-                orderNumber,
-                "📦 Ваш заказ готовится.");
+            await _idempotency.ExecuteAsync(
+                operationId,
+                telegramUserId,
+                IdempotencyOperationTypes.OrderStatusChange,
+                new
+                {
+                    OrderNumber = orderNumber,
+                    Status = OrderStatus.Preparing
+                },
+                async cancellationToken =>
+                {
+                    await _orderService.MarkAsPreparingAsync(
+                        orderNumber,
+                        cancellationToken);
+
+                    await EnqueueOrderStatusAsync(
+                        orderNumber,
+                        "📦 Ваш заказ готовится.",
+                        cancellationToken);
+                });
 
             await SendAdminOrderActionsAsync(
                 chatId,
@@ -682,11 +807,30 @@ public class TelegramUpdateHandler
             if (!long.TryParse(numberText, out var orderNumber))
                 return;
 
-            await _orderService.MarkAsDeliveringAsync(orderNumber);
+            var operationId =
+                IdempotencyOperationId.FromSource(
+                    $"telegram:callback:{query.Id}");
 
-            await NotifyOrderStatusAsync(
-                orderNumber,
-                "🚚 Ваш заказ передан в доставку.");
+            await _idempotency.ExecuteAsync(
+                operationId,
+                telegramUserId,
+                IdempotencyOperationTypes.OrderStatusChange,
+                new
+                {
+                    OrderNumber = orderNumber,
+                    Status = OrderStatus.Delivering
+                },
+                async cancellationToken =>
+                {
+                    await _orderService.MarkAsDeliveringAsync(
+                        orderNumber,
+                        cancellationToken);
+
+                    await EnqueueOrderStatusAsync(
+                        orderNumber,
+                        "🚚 Ваш заказ передан в доставку.",
+                        cancellationToken);
+                });
 
             await SendAdminOrderActionsAsync(
                 chatId,
@@ -703,11 +847,26 @@ public class TelegramUpdateHandler
             if (!long.TryParse(numberText, out var orderNumber))
                 return;
 
-            await _orderService.CompleteAsync(orderNumber);
+            var operationId =
+                IdempotencyOperationId.FromSource(
+                    $"telegram:callback:{query.Id}");
 
-            await NotifyOrderStatusAsync(
-                orderNumber,
-                "✅ Ваш заказ завершён.");
+            await _idempotency.ExecuteAsync(
+                operationId,
+                telegramUserId,
+                IdempotencyOperationTypes.OrderComplete,
+                new { OrderNumber = orderNumber },
+                async cancellationToken =>
+                {
+                    await _orderService.CompleteAsync(
+                        orderNumber,
+                        cancellationToken);
+
+                    await EnqueueOrderStatusAsync(
+                        orderNumber,
+                        "✅ Ваш заказ завершён.",
+                        cancellationToken);
+                });
 
             await _botClient.SendMessage(
                 chatId,
@@ -753,13 +912,34 @@ public class TelegramUpdateHandler
             if (!long.TryParse(numberText, out var orderNumber))
                 return;
 
-            await _orderService.CancelAsync(
-                orderNumber,
-                "Отменено администратором.");
+            var operationId =
+                IdempotencyOperationId.FromSource(
+                    $"telegram:callback:{query.Id}");
 
-            await NotifyOrderStatusAsync(
-                orderNumber,
-                "❌ Ваш заказ отменён администратором.");
+            const string cancellationReason =
+                "Отменено администратором.";
+
+            await _idempotency.ExecuteAsync(
+                operationId,
+                telegramUserId,
+                IdempotencyOperationTypes.OrderCancel,
+                new
+                {
+                    OrderNumber = orderNumber,
+                    Reason = cancellationReason
+                },
+                async cancellationToken =>
+                {
+                    await _orderService.CancelAsync(
+                        orderNumber,
+                        cancellationReason,
+                        cancellationToken);
+
+                    await EnqueueOrderStatusAsync(
+                        orderNumber,
+                        "❌ Ваш заказ отменён администратором.",
+                        cancellationToken);
+                });
 
             await _botClient.SendMessage(
                 chatId,
@@ -1007,7 +1187,26 @@ public class TelegramUpdateHandler
                 Guid.TryParse(parts[3], out var workerId))
             {
                 var admin = await GetRequiredAdminStaffAsync(telegramUserId);
-                await _assignmentService.AssignAsync(orderNumber, workerId, admin.Id);
+                var operationId =
+                    IdempotencyOperationId.FromSource(
+                        $"telegram:callback:{query.Id}");
+
+                await _idempotency.ExecuteAsync(
+                    operationId,
+                    telegramUserId,
+                    IdempotencyOperationTypes.OrderAssignmentCreate,
+                    new
+                    {
+                        OrderNumber = orderNumber,
+                        WorkerId = workerId,
+                        AdminId = admin.Id
+                    },
+                    cancellationToken =>
+                        _assignmentService.AssignAsync(
+                            orderNumber,
+                            workerId,
+                            admin.Id,
+                            cancellationToken));
                 await _botClient.SendMessage(chatId, "✅ Заказ назначен сотруднику.");
                 await SendAdminOrderActionsAsync(chatId, orderNumber);
             }
@@ -1019,7 +1218,24 @@ public class TelegramUpdateHandler
             if (long.TryParse(query.Data["admin:unassign:".Length..], out var orderNumber))
             {
                 var admin = await GetRequiredAdminStaffAsync(telegramUserId);
-                await _assignmentService.ReleaseAsync(orderNumber, admin.Id);
+                var operationId =
+                    IdempotencyOperationId.FromSource(
+                        $"telegram:callback:{query.Id}");
+
+                await _idempotency.ExecuteAsync(
+                    operationId,
+                    telegramUserId,
+                    IdempotencyOperationTypes.OrderAssignmentRelease,
+                    new
+                    {
+                        OrderNumber = orderNumber,
+                        AdminId = admin.Id
+                    },
+                    cancellationToken =>
+                        _assignmentService.ReleaseAsync(
+                            orderNumber,
+                            admin.Id,
+                            cancellationToken));
                 await _botClient.SendMessage(chatId, "✅ Назначение сотрудника отменено.");
                 await SendAdminOrderActionsAsync(chatId, orderNumber);
             }
@@ -1034,8 +1250,26 @@ public class TelegramUpdateHandler
                 var assignment = await _assignmentService.GetOrderAssignmentAsync(orderNumber)
                     ?? throw new InvalidOperationException("Сначала назначьте сотрудника на заказ.");
 
-                await _shipmentService.CreateReadyShipmentAsync(
-                    orderNumber, assignment.StaffId, admin.Id);
+                var operationId =
+                    IdempotencyOperationId.FromSource(
+                        $"telegram:callback:{query.Id}");
+
+                await _idempotency.ExecuteAsync(
+                    operationId,
+                    telegramUserId,
+                    IdempotencyOperationTypes.ShipmentCreate,
+                    new
+                    {
+                        OrderNumber = orderNumber,
+                        WorkerId = assignment.StaffId,
+                        AdminId = admin.Id
+                    },
+                    cancellationToken =>
+                        _shipmentService.CreateReadyShipmentAsync(
+                            orderNumber,
+                            assignment.StaffId,
+                            admin.Id,
+                            cancellationToken));
                 await _botClient.SendMessage(chatId, "✅ Создана отправка для готовых товаров.");
                 await SendAdminShipmentsAsync(chatId, orderNumber);
             }
@@ -1057,7 +1291,26 @@ public class TelegramUpdateHandler
                     _ => throw new InvalidOperationException("Неизвестный статус отправки.")
                 };
                 var admin = await GetRequiredAdminStaffAsync(telegramUserId);
-                var shipment = await _shipmentService.ChangeStatusAsync(shipmentId, admin.Id, status);
+                var operationId =
+                    IdempotencyOperationId.FromSource(
+                        $"telegram:callback:{query.Id}");
+
+                var shipment = await _idempotency.ExecuteAsync(
+                    operationId,
+                    telegramUserId,
+                    IdempotencyOperationTypes.ShipmentStatusChange,
+                    new
+                    {
+                        ShipmentId = shipmentId,
+                        AdminId = admin.Id,
+                        Status = status
+                    },
+                    cancellationToken =>
+                        _shipmentService.ChangeStatusAsync(
+                            shipmentId,
+                            admin.Id,
+                            status,
+                            cancellationToken));
                 await SendAdminShipmentsAsync(chatId, shipment.OrderNumber);
             }
             return;
@@ -1434,10 +1687,9 @@ public class TelegramUpdateHandler
                     "Неизвестное действие со специальным заказом.")
             };
 
-            await _orderService.ChangeSpecialOrderStatusAsync(
-                orderNumber,
-                orderItemId,
-                newStatus);
+            var operationId =
+                IdempotencyOperationId.FromSource(
+                    $"telegram:callback:{query.Id}");
 
             var customerMessage = newStatus switch
             {
@@ -1453,9 +1705,29 @@ public class TelegramUpdateHandler
                 _ => "Статус специального заказа изменён."
             };
 
-            await NotifyOrderStatusAsync(
-                orderNumber,
-                customerMessage);
+            await _idempotency.ExecuteAsync(
+                operationId,
+                telegramUserId,
+                IdempotencyOperationTypes.SpecialOrderStatusChange,
+                new
+                {
+                    OrderNumber = orderNumber,
+                    OrderItemId = orderItemId,
+                    Status = newStatus
+                },
+                async cancellationToken =>
+                {
+                    await _orderService.ChangeSpecialOrderStatusAsync(
+                        orderNumber,
+                        orderItemId,
+                        newStatus,
+                        cancellationToken);
+
+                    await EnqueueOrderStatusAsync(
+                        orderNumber,
+                        customerMessage,
+                        cancellationToken);
+                });
 
             await SendAdminOrderActionsAsync(
                 chatId,
@@ -2713,82 +2985,31 @@ public class TelegramUpdateHandler
             ? normalized
             : $"{normalized[..(maximumLength - 1)]}…";
     }
-    private async Task SendNewOrderToAdminAsync(OrderDto order)
-    {
-        var customer = await _customerService.GetByIdAsync(order.CustomerId);
-        var customerFullName = customer is null
-            ? "Неизвестный клиент"
-            : string.Join(
-                " ",
-                new[] { customer.FirstName, customer.LastName }
-                    .Where(value => !string.IsNullOrWhiteSpace(value)));
-
-        var text = new StringBuilder();
-
-        text.AppendLine($"🆕 Новый заказ #{order.OrderNumber}");
-        text.AppendLine($"👤 Клиент: {customerFullName}");
-        text.AppendLine();
-        text.AppendLine($"Телефон: {order.PhoneNumber}");
-        text.AppendLine($"Адрес: {order.DeliveryAddress}");
-        text.AppendLine();
-
-        foreach (var item in order.Items)
-        {
-            text.AppendLine(
-                $"• {item.ProductName}");
-
-            text.AppendLine(
-                $"  {item.TotalQuantity} × " +
-                $"{item.UnitPrice:0.00} AZN = " +
-                $"{item.LineTotal:0.00} AZN");
-
-            if (item.SpecialOrderQuantity > 0)
-            {
-                text.AppendLine(
-                    $"  Со склада: {item.FromStockQuantity}, " +
-                    $"под заказ: {item.SpecialOrderQuantity}");
-            }
-        }
-
-        text.AppendLine();
-        text.AppendLine(
-            $"Стоимость товаров: {order.ProductsTotal:0.00} AZN");
-
-        await _botClient.SendMessage(
-            _telegramOptions.AdminUserId,
-            text.ToString(),
-            replyMarkup: new InlineKeyboardMarkup(
-                new[]
-                {
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData(
-                        "✅ Подтвердить",
-                        $"admin:confirm:{order.OrderNumber}"),
-
-                    InlineKeyboardButton.WithCallbackData(
-                        "❌ Отменить",
-                        $"admin:cancel:{order.OrderNumber}")
-                }
-                }));
-    }
-    private async Task NotifyOrderStatusAsync(
-    long orderNumber,
-    string statusMessage)
+    private async Task EnqueueOrderStatusAsync(
+        long orderNumber,
+        string statusMessage,
+        CancellationToken cancellationToken)
     {
         var order =
-            await _orderService.GetByOrderNumberAsync(orderNumber)
+            await _orderService.GetByOrderNumberAsync(
+                orderNumber,
+                cancellationToken)
             ?? throw new KeyNotFoundException(
                 "Заказ не найден.");
 
         var customer =
-            await _customerService.GetByIdAsync(order.CustomerId)
+            await _customerService.GetByIdAsync(
+                order.CustomerId,
+                cancellationToken)
             ?? throw new KeyNotFoundException(
                 "Клиент не найден.");
 
-        await _botClient.SendMessage(
-            customer.TelegramUserId,
-            $"{statusMessage}\n\nЗаказ: №{orderNumber}");
+        await _outbox.EnqueueAsync(
+            OutboxMessageTypes.TelegramMessage,
+            new TelegramMessageOutboxPayload(
+                customer.TelegramUserId,
+                $"{statusMessage}\n\nЗаказ: №{orderNumber}"),
+            cancellationToken);
     }
 
     private async Task SendAdminOrderActionsAsync(

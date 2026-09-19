@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api, productImageUrl } from './client';
 import type {
   Category,
@@ -80,6 +80,7 @@ export default function CustomerApp({
   const [checkoutPhone, setCheckoutPhone] = useState('');
   const [addressId, setAddressId] = useState('');
   const [companyId, setCompanyId] = useState('');
+  const checkoutOperationId = useRef<string | null>(null);
   const [newAddress, setNewAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(!demo);
@@ -189,6 +190,7 @@ export default function CustomerApp({
     setCheckoutPhone(profile?.phoneNumber ?? phone);
     setAddressId(addresses[0]?.id ?? '');
     setCompanyId(companies[0]?.id ?? '');
+    checkoutOperationId.current = crypto.randomUUID();
     setCheckoutOpen(true);
   }
 
@@ -203,12 +205,15 @@ export default function CustomerApp({
       return;
     }
 
+    const operationId = checkoutOperationId.current ?? crypto.randomUUID();
+    checkoutOperationId.current = operationId;
+
     const completed = await run(async () => {
       if (demo) return;
       if (checkoutPhone.trim() !== profile?.phoneNumber) {
         await api.updateCustomerPhone(checkoutPhone.trim());
       }
-      const order = await api.checkoutCustomerOrder(addressId, companyId);
+      const order = await api.checkoutCustomerOrder(addressId, companyId, operationId);
       setOrders(values => [order, ...values]);
       setProfile(value => value ? { ...value, phoneNumber: checkoutPhone.trim() } : value);
       setPhone(checkoutPhone.trim());
@@ -216,6 +221,7 @@ export default function CustomerApp({
     }, 'Ваш заказ принят.');
 
     if (completed) {
+      checkoutOperationId.current = null;
       setCheckoutOpen(false);
       setSection('orders');
     }
