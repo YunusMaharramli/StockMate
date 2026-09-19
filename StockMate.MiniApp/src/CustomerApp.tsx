@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api, productImageUrl } from './client';
+import {
+  getCachedCustomerCart,
+  getCachedCustomerCatalog,
+  isNetworkFailure,
+  saveCachedCustomerCart,
+  saveCachedCustomerCatalog,
+} from './offlineDb';
 import type {
   Category,
   CustomerAddress,
@@ -86,6 +93,9 @@ export default function CustomerApp({
   const [loading, setLoading] = useState(!demo);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [backendAvailable, setBackendAvailable] = useState(demo || navigator.onLine);
+  const [cartSyncPending, setCartSyncPending] = useState(false);
+  const [reconnectRequest, setReconnectRequest] = useState(0);
 
   const visibleSubcategoryNames = useMemo(() => {
     const source = categoryId
@@ -101,28 +111,140 @@ export default function CustomerApp({
       return;
     }
 
-    void run(async () => {
-      const [products, categoryList, subcategoryList, currentCart, currentProfile, addressList, companyList, orderList] = await Promise.all([
-        api.getCustomerCatalog(),
-        api.getCustomerCategories(),
-        api.getCustomerSubcategories(),
-        api.getCustomerCart(),
-        api.getCustomerProfile(),
-        api.getCustomerAddresses(),
-        api.getCustomerDeliveryCompanies(),
-        api.getMyOrders(),
+    const telegramUserId = identity?.telegramUserId;
+    if (!telegramUserId) {
+      setLoading(false);
+      return;
+    }
+
+    let disposed = false;
+
+    const initialize = async () => {
+      setLoading(true);
+      setError('');
+
+      const [cachedCart, cachedCatalog] = await Promise.all([
+        getCachedCustomerCart(telegramUserId).catch(() => null),
+        getCachedCustomerCatalog(telegramUserId).catch(() => null),
       ]);
-      setCatalog(products);
-      setCategories(categoryList);
-      setSubcategories(subcategoryList);
-      setCart(currentCart);
-      setProfile(currentProfile);
-      setPhone(currentProfile.phoneNumber ?? '');
-      setAddresses(addressList);
-      setCompanies(companyList);
-      setOrders(orderList);
-    });
-  }, [demo]);
+
+      if (disposed) return;
+
+      if (cachedCart) {
+        setCart(cachedCart.cart);
+        setCartSyncPending(cachedCart.isDirty);
+      }
+      if (cachedCatalog) {
+        setCatalog(pageCachedCatalog(cachedCatalog.products));
+        setCategories(cachedCatalog.categories);
+        setSubcategories(cachedCatalog.subcategories);
+      }
+
+      try {
+        const [products, categoryList, subcategoryList, serverCart, currentProfile, addressList, companyList, orderList] = await Promise.all([
+          api.getCustomerCatalog(),
+          api.getCustomerCategories(),
+          api.getCustomerSubcategories(),
+          api.getCustomerCart(),
+          api.getCustomerProfile(),
+          api.getCustomerAddresses(),
+          api.getCustomerDeliveryCompanies(),
+          api.getMyOrders(),
+        ]);
+
+        const currentCart = cachedCart?.isDirty
+          ? await synchronizeCartSnapshot(cachedCart.cart)
+          : serverCart;
+
+        if (disposed) return;
+
+        setCatalog(products);
+        setCategories(categoryList);
+        setSubcategories(subcategoryList);
+        setCart(currentCart);
+        setProfile(currentProfile);
+        setPhone(currentProfile.phoneNumber ?? '');
+        setAddresses(addressList);
+        setCompanies(companyList);
+        setOrders(orderList);
+        setBackendAvailable(true);
+        setCartSyncPending(false);
+
+        void Promise.all([
+          saveCachedCustomerCart(telegramUserId, currentCart, false),
+          saveCachedCustomerCatalog(
+            telegramUserId,
+            products.items,
+            categoryList,
+            subcategoryList,
+          ),
+        ]).catch(() => undefined);
+      } catch (reason) {
+        if (disposed) return;
+
+        if (isNetworkFailure(reason)) {
+          setBackendAvailable(false);
+          if (cachedCart || cachedCatalog) {
+            setNotice('Офлайн-режим: показаны данные, сохранённые на этом устройстве.');
+          } else {
+            setError('Сервер недоступен, а сохранённых данных на этом устройстве пока нет.');
+          }
+        } else {
+          setError(reason instanceof Error ? reason.message : 'Не удалось загрузить данные.');
+        }
+      } finally {
+        if (!disposed) setLoading(false);
+      }
+    };
+
+    void initialize();
+    return () => { disposed = true; };
+  }, [demo, identity?.telegramUserId]);
+
+  useEffect(() => {
+    const telegramUserId = identity?.telegramUserId;
+    if (demo || !telegramUserId || backendAvailable) return;
+
+    let disposed = false;
+    let checking = false;
+
+    const reconnect = async () => {
+      if (checking) return;
+      checking = true;
+
+      try {
+        const cachedCart = await getCachedCustomerCart(telegramUserId);
+        const synchronizedCart = cachedCart?.isDirty
+          ? await synchronizeCartSnapshot(cachedCart.cart)
+          : await api.getCustomerCart();
+
+        if (disposed) return;
+        setCart(synchronizedCart);
+        setBackendAvailable(true);
+        setCartSyncPending(false);
+        setError('');
+        setNotice('Соединение восстановлено. Корзина синхронизирована.');
+        await saveCachedCustomerCart(telegramUserId, synchronizedCart, false);
+      } catch (reason) {
+        if (!disposed && !isNetworkFailure(reason)) {
+          setError(reason instanceof Error ? reason.message : 'Не удалось синхронизировать корзину.');
+        }
+      } finally {
+        checking = false;
+      }
+    };
+
+    const handleOnline = () => { void reconnect(); };
+    const timer = window.setInterval(() => void reconnect(), 15_000);
+    window.addEventListener('online', handleOnline);
+    void reconnect();
+
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [backendAvailable, demo, identity?.telegramUserId, reconnectRequest]);
 
   async function run(action: () => Promise<void>, successMessage = '') {
     setLoading(true);
@@ -133,7 +255,12 @@ export default function CustomerApp({
       if (successMessage) setNotice(successMessage);
       return true;
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Не удалось выполнить операцию.');
+      if (isNetworkFailure(reason)) {
+        setBackendAvailable(false);
+        setError('Сервер временно недоступен. Попробуйте снова после восстановления соединения.');
+      } else {
+        setError(reason instanceof Error ? reason.message : 'Не удалось выполнить операцию.');
+      }
       return false;
     } finally {
       setLoading(false);
@@ -142,7 +269,41 @@ export default function CustomerApp({
 
   async function loadCatalog(pageNumber = 1, nextCategory = categoryId, nextSubcategory = subcategoryName, nextSearch = search) {
     if (demo) return;
-    setCatalog(await api.getCustomerCatalog(pageNumber, nextCategory, nextSubcategory, nextSearch));
+    const telegramUserId = identity?.telegramUserId;
+
+    try {
+      const products = await api.getCustomerCatalog(
+        pageNumber,
+        nextCategory,
+        nextSubcategory,
+        nextSearch,
+      );
+      setCatalog(products);
+      setBackendAvailable(true);
+      if (telegramUserId) {
+        void saveCachedCustomerCatalog(
+          telegramUserId,
+          products.items,
+          categories,
+          subcategories,
+        ).catch(() => undefined);
+      }
+    } catch (reason) {
+      if (!isNetworkFailure(reason) || !telegramUserId) throw reason;
+
+      const cached = await getCachedCustomerCatalog(telegramUserId);
+      if (!cached) throw reason;
+
+      setCatalog(pageCachedCatalog(
+        cached.products,
+        pageNumber,
+        nextCategory,
+        nextSubcategory,
+        nextSearch,
+      ));
+      setBackendAvailable(false);
+      setNotice('Офлайн-режим: фильтр применён к ранее загруженным товарам.');
+    }
   }
 
   async function applyFilters(event?: FormEvent) {
@@ -151,42 +312,98 @@ export default function CustomerApp({
   }
 
   async function addToCart(product: CustomerCatalogProduct, amount: number) {
-    await run(async () => {
-      const current = cart.items.find(item => item.productId === product.id)?.quantity ?? 0;
-      setCart(demo ? {
-        ...cart,
-        items: [...cart.items.filter(item => item.productId !== product.id), {
-          productId: product.id,
-          productName: product.name,
-          productCode: product.code,
-          unitPrice: product.price,
-          quantity: current + amount,
-          lineTotal: product.price * (current + amount),
-        }],
-        productsTotal: cart.productsTotal + product.price * amount,
-      } : await api.setCustomerCartItem(product.id, current + amount));
-      setSelectedProduct(null);
-      setQuantity(1);
-    }, 'Товар добавлен в корзину.');
+    const current = cart.items.find(item => item.productId === product.id)?.quantity ?? 0;
+    const nextQuantity = current + amount;
+    const nextCart = recalculateCart([
+      ...cart.items.filter(item => item.productId !== product.id),
+      {
+        productId: product.id,
+        productName: product.name,
+        productCode: product.code,
+        unitPrice: product.price,
+        quantity: nextQuantity,
+        lineTotal: product.price * nextQuantity,
+      },
+    ], cart);
+
+    await updateCustomerCart(
+      nextCart,
+      () => api.setCustomerCartItem(product.id, nextQuantity),
+      'Товар добавлен в корзину.',
+    );
+    setSelectedProduct(null);
+    setQuantity(1);
   }
 
   async function changeCartQuantity(productId: string, nextQuantity: number) {
-    await run(async () => {
-      if (nextQuantity <= 0) {
-        setCart(demo
-          ? { ...cart, items: cart.items.filter(item => item.productId !== productId) }
-          : await api.removeCustomerCartItem(productId));
+    const nextCart = recalculateCart(
+      nextQuantity <= 0
+        ? cart.items.filter(item => item.productId !== productId)
+        : cart.items.map(item => item.productId === productId
+          ? { ...item, quantity: nextQuantity, lineTotal: item.unitPrice * nextQuantity }
+          : item),
+      cart,
+    );
+
+    await updateCustomerCart(
+      nextCart,
+      () => nextQuantity <= 0
+        ? api.removeCustomerCartItem(productId)
+        : api.setCustomerCartItem(productId, nextQuantity),
+    );
+  }
+
+  async function updateCustomerCart(
+    nextCart: CustomerCart,
+    remoteAction: () => Promise<CustomerCart>,
+    successMessage = '',
+  ) {
+    setCart(nextCart);
+    setError('');
+
+    if (demo) {
+      if (successMessage) setNotice(successMessage);
+      return;
+    }
+
+    const telegramUserId = identity?.telegramUserId;
+    if (!telegramUserId) return;
+
+    setCartSyncPending(true);
+    await saveCachedCustomerCart(telegramUserId, nextCart, true)
+      .catch(() => undefined);
+
+    if (!backendAvailable || !navigator.onLine) {
+      setBackendAvailable(false);
+      setNotice('Корзина сохранена на устройстве и будет синхронизирована после восстановления связи.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const synchronizedCart = await remoteAction();
+      setCart(synchronizedCart);
+      setCartSyncPending(false);
+      setBackendAvailable(true);
+      await saveCachedCustomerCart(telegramUserId, synchronizedCart, false);
+      if (successMessage) setNotice(successMessage);
+    } catch (reason) {
+      if (isNetworkFailure(reason)) {
+        setBackendAvailable(false);
+        setNotice('Корзина сохранена на устройстве и будет синхронизирована после восстановления связи.');
       } else {
-        setCart(demo
-          ? recalculateCart(cart.items.map(item => item.productId === productId
-            ? { ...item, quantity: nextQuantity, lineTotal: item.unitPrice * nextQuantity }
-            : item), cart)
-          : await api.setCustomerCartItem(productId, nextQuantity));
+        setError(reason instanceof Error ? reason.message : 'Не удалось обновить корзину.');
       }
-    });
+    } finally {
+      setLoading(false);
+    }
   }
 
   function beginCheckout() {
+    if (!backendAvailable) {
+      setError('Оформление заказа недоступно без соединения с сервером. Корзина сохранена на устройстве.');
+      return;
+    }
     setCheckoutPhone(profile?.phoneNumber ?? phone);
     setAddressId(addresses[0]?.id ?? '');
     setCompanyId(companies[0]?.id ?? '');
@@ -196,6 +413,11 @@ export default function CustomerApp({
 
   async function completeCheckout(event: FormEvent) {
     event.preventDefault();
+    if (!backendAvailable) {
+      setCheckoutOpen(false);
+      setError('Оформление заказа недоступно без соединения с сервером.');
+      return;
+    }
     if (!checkoutPhone.trim() || checkoutPhone.replace(/\D/g, '').length < 9) {
       setError('Введите корректный номер телефона.');
       return;
@@ -217,7 +439,12 @@ export default function CustomerApp({
       setOrders(values => [order, ...values]);
       setProfile(value => value ? { ...value, phoneNumber: checkoutPhone.trim() } : value);
       setPhone(checkoutPhone.trim());
-      setCart(await api.getCustomerCart());
+      const refreshedCart = await api.getCustomerCart();
+      setCart(refreshedCart);
+      setCartSyncPending(false);
+      if (identity?.telegramUserId) {
+        await saveCachedCustomerCart(identity.telegramUserId, refreshedCart, false);
+      }
     }, 'Ваш заказ принят.');
 
     if (completed) {
@@ -269,8 +496,28 @@ export default function CustomerApp({
   async function openSection(next: CustomerSection) {
     setSection(next);
     if (demo) return;
+
+    if (!backendAvailable) {
+      if (next === 'shop' || next === 'cart') return;
+      setError('Этот раздел недоступен без соединения с сервером.');
+      return;
+    }
+
     await run(async () => {
-      if (next === 'cart') setCart(await api.getCustomerCart());
+      if (next === 'cart') {
+        const telegramUserId = identity?.telegramUserId;
+        const cachedCart = telegramUserId
+          ? await getCachedCustomerCart(telegramUserId)
+          : null;
+        const currentCart = cachedCart?.isDirty
+          ? await synchronizeCartSnapshot(cachedCart.cart)
+          : await api.getCustomerCart();
+        setCart(currentCart);
+        setCartSyncPending(false);
+        if (telegramUserId) {
+          await saveCachedCustomerCart(telegramUserId, currentCart, false);
+        }
+      }
       if (next === 'orders') setOrders(await api.getMyOrders());
       if (next === 'profile') {
         const [currentProfile, addressList, companyList] = await Promise.all([
@@ -307,6 +554,14 @@ export default function CustomerApp({
       <button className="cart-shortcut" onClick={() => void openSection('cart')}>🛒<b>{cart.items.length}</b></button>
     </header>
 
+    {!backendAvailable && <div className="customer-offline" role="status">
+      <span><b>Офлайн-режим</b> Корзина сохраняется на этом устройстве.</span>
+      <button onClick={() => setReconnectRequest(value => value + 1)}>Проверить</button>
+    </div>}
+    {backendAvailable && cartSyncPending && <div className="customer-sync-pending" role="status">
+      Изменения корзины ожидают синхронизации.
+    </div>}
+
     {error && <Message text={error} error close={() => setError('')} />}
     {notice && <Message text={notice} close={() => setNotice('')} />}
 
@@ -342,12 +597,12 @@ export default function CustomerApp({
     </section>}
 
     {section === 'cart' && <section className="customer-screen">
-      <div className="customer-page-title"><div><span>Ваш заказ</span><h1>Корзина</h1></div>{cart.items.length > 0 && <button onClick={() => run(async () => { if (!demo) await api.clearCustomerCart(); setCart(emptyCart); }, 'Корзина очищена.')}>Очистить</button>}</div>
+      <div className="customer-page-title"><div><span>Ваш заказ</span><h1>Корзина</h1></div>{cart.items.length > 0 && <button onClick={() => updateCustomerCart(emptyCart, async () => { await api.clearCustomerCart(); return api.getCustomerCart(); }, 'Корзина очищена.')}>Очистить</button>}</div>
       <div className="customer-list">
         {cart.items.map(item => <article className="customer-cart-card" key={item.productId}><div><small>{item.productCode}</small><h2>{item.productName}</h2><strong>{money(item.lineTotal)}</strong></div><div className="quantity-control"><button onClick={() => changeCartQuantity(item.productId, item.quantity - 1)}>−</button><b>{item.quantity}</b><button onClick={() => changeCartQuantity(item.productId, item.quantity + 1)}>+</button></div></article>)}
         {!cart.items.length && <CustomerEmpty text="Ваша корзина пуста" />}
       </div>
-      {cart.items.length > 0 && <div className="customer-cart-total"><span>Стоимость товаров</span><strong>{money(cart.productsTotal)}</strong><button className="customer-primary" onClick={beginCheckout}>Оформить заказ</button></div>}
+      {cart.items.length > 0 && <div className="customer-cart-total"><span>Стоимость товаров</span><strong>{money(cart.productsTotal)}</strong><button className="customer-primary" disabled={!backendAvailable || cartSyncPending} onClick={beginCheckout}>{backendAvailable ? 'Оформить заказ' : 'Ожидание соединения'}</button></div>}
     </section>}
 
     {section === 'orders' && <section className="customer-screen">
@@ -379,6 +634,59 @@ export default function CustomerApp({
 
 function recalculateCart(items: CustomerCart['items'], cart: CustomerCart): CustomerCart {
   return { ...cart, items, productsTotal: items.reduce((sum, item) => sum + item.lineTotal, 0) };
+}
+
+async function synchronizeCartSnapshot(
+  localCart: CustomerCart,
+): Promise<CustomerCart> {
+  const serverCart = await api.getCustomerCart();
+  const localItems = new Map(
+    localCart.items.map(item => [item.productId, item]),
+  );
+
+  for (const serverItem of serverCart.items) {
+    if (!localItems.has(serverItem.productId)) {
+      await api.removeCustomerCartItem(serverItem.productId);
+    }
+  }
+
+  for (const localItem of localCart.items) {
+    await api.setCustomerCartItem(
+      localItem.productId,
+      localItem.quantity,
+    );
+  }
+
+  return api.getCustomerCart();
+}
+
+function pageCachedCatalog(
+  products: CustomerCatalogProduct[],
+  requestedPage = 1,
+  categoryId = '',
+  subcategoryName = '',
+  search = '',
+): PagedResult<CustomerCatalogProduct> {
+  const pageSize = 10;
+  const searchText = search.trim().toLocaleLowerCase('ru');
+  const filtered = products
+    .filter(product => !categoryId || product.categoryId === categoryId)
+    .filter(product => !subcategoryName || product.subcategoryName === subcategoryName)
+    .filter(product => !searchText
+      || product.name.toLocaleLowerCase('ru').includes(searchText)
+      || product.code.toLocaleLowerCase('ru').includes(searchText))
+    .sort((left, right) => left.name.localeCompare(right.name, 'ru'));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageNumber = Math.min(Math.max(1, requestedPage), totalPages);
+  const offset = (pageNumber - 1) * pageSize;
+
+  return {
+    items: filtered.slice(offset, offset + pageSize),
+    pageNumber,
+    pageSize,
+    totalItems: filtered.length,
+    totalPages,
+  };
 }
 
 function NavButton({ active, icon, text, badge, onClick }: { active: boolean; icon: string; text: string; badge?: number; onClick: () => void }) {

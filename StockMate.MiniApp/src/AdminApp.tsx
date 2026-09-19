@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api, productImageUrl } from './client';
 import CustomerApp from './CustomerApp';
+import {
+  deleteCustomerIdentity,
+  getCustomerIdentity,
+  isNetworkFailure,
+  saveCustomerIdentity,
+  telegramUserIdFromInitData,
+} from './offlineDb';
 import type {
   Assignment,
   Category,
@@ -139,6 +146,11 @@ export default function AdminApp() {
         ? event.detail
         : 'У вас нет доступа.';
 
+      const telegramUserId = telegramUserIdFromInitData();
+      if (telegramUserId !== null) {
+        void deleteCustomerIdentity(telegramUserId).catch(() => undefined);
+      }
+
       setIdentity(null);
       setError(message);
       setLoading(false);
@@ -169,6 +181,7 @@ export default function AdminApp() {
     api.authenticate()
       .then(async user => {
         setIdentity(user);
+        await saveCustomerIdentity(user).catch(() => undefined);
         if (user.role === 'Worker') {
           const [assigned, deliveries] = await Promise.all([
             api.getWorkerAssignments(),
@@ -184,7 +197,20 @@ export default function AdminApp() {
           setCustomers(customerList);
         }
       })
-      .catch(reason => setError(reason instanceof Error ? reason.message : 'Не удалось войти.'))
+      .catch(async reason => {
+        const telegramUserId = telegramUserIdFromInitData();
+        const cachedIdentity = isNetworkFailure(reason) && telegramUserId !== null
+          ? await getCustomerIdentity(telegramUserId).catch(() => null)
+          : null;
+
+        if (cachedIdentity) {
+          setIdentity(cachedIdentity);
+          setError('');
+          return;
+        }
+
+        setError(reason instanceof Error ? reason.message : 'Не удалось войти.');
+      })
       .finally(() => setLoading(false));
 
     return () => window.removeEventListener(
