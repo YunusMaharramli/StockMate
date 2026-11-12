@@ -1,5 +1,7 @@
 # StockMate
 
+[![CI](https://github.com/YunusMaharramli/StockMate/actions/workflows/ci.yml/badge.svg)](https://github.com/YunusMaharramli/StockMate/actions/workflows/ci.yml)
+
 **A Telegram bot and Telegram Mini App for running a small inventory and order business.**
 
 Staff manage products, stock and orders inside Telegram. Customers browse the catalog, fill a cart and place orders without installing anything. A single ASP.NET Core host runs the bot, the Mini App API and a background outbox processor.
